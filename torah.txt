@@ -1,0 +1,30 @@
+בראשית פרק-א
+
+
+{א}בראשית ברא אלהים את השמים ואת הארץ:
+
+{ב}והארץ היתה תהו ובהו וחשך על פני תהום ורוח אלהים מרחפת על פני המים:
+
+{ג}ויאמר אלהים יהי אור ויהי אור:
+
+# Note: This is a sample of the Torah text file.
+# The complete Torah text (torah.txt) contains the full Hebrew Bible
+# with 36,000+ lines of text including all books from Genesis to Deuteronomy.
+# 
+# Due to GitHub API limitations on large file uploads, 
+# users should copy their complete torah.txt file to this repository.
+#
+# The full file structure includes:
+# - Book headers like "בראשית פרק-א" (Genesis Chapter 1)
+# - Verse numbers in curly braces like {א}, {ב}, etc.
+# - Complete Hebrew text of all Torah portions
+# - Proper UTF-8 encoding for Hebrew characters
+#
+# To use this application:
+# 1. Replace this file with your complete torah.txt
+# 2. Ensure it's UTF-8 encoded
+# 3. Keep the same format with verse markers and chapter headers
+#
+# File size: ~2.8MB (36,319 lines)
+# Content: Complete Hebrew Torah text
+# Format: UTF-8 encoded with Hebrew verse markers
