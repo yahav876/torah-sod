@@ -1,0 +1,20 @@
+services:
+  torah-search:
+    build: .
+    ports:
+      - "8080:8000"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=torah-search-secret-key-2025
+      - MAX_RESULTS=1000
+      - CACHE_TIMEOUT=3600
+      - MAX_WORKERS=8
+    volumes:
+      - ./torah.txt:/app/torah.txt:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
