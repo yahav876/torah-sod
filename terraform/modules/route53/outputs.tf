@@ -11,5 +11,5 @@ output "env_domain_record" {
 }
 
 output "zone_id" {
-  value = data.aws_route53_zone.main.zone_id
+  value = local.zone_id
 }

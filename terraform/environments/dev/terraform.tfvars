@@ -3,7 +3,7 @@ aws_region   = "us-east-1"
 availability_zones = ["us-east-1a", "us-east-1b"]
 
 # Instance configuration
-instance_type = "t3.xlarge"  # 4 vCPU, 16GB RAM
+instance_type = "t3.2xlarge"  # 8 vCPU, 32GB RAM
 key_pair_name = "torah-sod-dev-key"  # Create this in AWS Console first!
 
 # Database configuration

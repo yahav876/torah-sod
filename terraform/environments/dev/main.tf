@@ -153,4 +153,6 @@ module "route53" {
   alb_zone_id          = module.alb.alb_zone_id
   environment          = local.environment
   create_env_subdomain = true  # This will create dev.torah-sod.com
+  lookup_hosted_zone   = false  # Don't lookup, we're creating it with route53_zone module
+  zone_id              = module.route53_zone.zone_id
 }

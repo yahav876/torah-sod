@@ -62,3 +62,15 @@ resource "aws_ssm_parameter" "db_password" {
     Project     = var.project_name
   }
 }
+
+# CloudWatch Log Group for RDS
+resource "aws_cloudwatch_log_group" "rds" {
+  name              = "/aws/rds/instance/${var.project_name}-${var.environment}-db/postgresql"
+  retention_in_days = 7
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-rds-logs"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}

@@ -83,9 +83,15 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             "timezone": "UTC"
           },
           {
-            "file_path": "/var/log/docker/*.log",
+            "file_path": "/opt/torah-sod/logs/*.log",
             "log_group_name": "/aws/ec2/${project_name}-${environment}",
-            "log_stream_name": "{instance_id}/docker",
+            "log_stream_name": "{instance_id}/app-docker",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/lib/docker/containers/*/*-json.log",
+            "log_group_name": "/aws/ec2/${project_name}-${environment}",
+            "log_stream_name": "{instance_id}/docker-containers",
             "timezone": "UTC"
           },
           {
@@ -114,8 +120,10 @@ EOF
   -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
   -s
 
-# Create app directory
+# Create app directory and logs
 mkdir -p /opt/torah-sod
+mkdir -p /opt/torah-sod/logs
+mkdir -p /var/log/torah-sod
 cd /opt/torah-sod
 
 # Clone repository
@@ -137,8 +145,24 @@ EOF
 # Login to ECR
 aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query Account --output text).dkr.ecr.${aws_region}.amazonaws.com
 
-# Start the application
+# Configure Docker logging
+cat > /etc/docker/daemon.json <<EOF
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m",
+    "max-file": "3"
+  }
+}
+EOF
+
+systemctl restart docker
+
+# Start the application with proper logging
 docker compose -f docker-compose.aws.yml up -d
+
+# Create symlink for easier log access
+ln -sf /var/lib/docker/containers/*/torah-*.log /opt/torah-sod/logs/
 
 # Setup log rotation
 cat > /etc/logrotate.d/torah-sod <<EOF
