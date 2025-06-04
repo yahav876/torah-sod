@@ -44,39 +44,27 @@ resource "aws_lb_target_group" "main" {
   }
 }
 
-# HTTP listener - either redirects to HTTPS or forwards to target group
+# HTTP listener - redirects to HTTPS if certificate provided, otherwise forwards to target group
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
-    type = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-}
-
-# HTTP to HTTPS redirect listener (only if certificate is provided)
-resource "aws_lb_listener_rule" "http_to_https_redirect" {
-  count = var.certificate_arn != "" ? 1 : 0
-
-  listener_arn = aws_lb_listener.http.arn
-  priority     = 100
-
-  action {
-    type = "redirect"
-
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+    type = var.certificate_arn != "" ? "redirect" : "forward"
+    
+    # Redirect configuration (when certificate is provided)
+    dynamic "redirect" {
+      for_each = var.certificate_arn != "" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
     }
-  }
-
-  condition {
-    path_pattern {
-      values = ["/*"]
-    }
+    
+    # Forward configuration (when no certificate)
+    target_group_arn = var.certificate_arn == "" ? aws_lb_target_group.main.arn : null
   }
 }
 

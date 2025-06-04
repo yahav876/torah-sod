@@ -38,6 +38,14 @@ provider "aws" {
 locals {
   environment = "dev"
   github_repo = "https://github.com/yahav876/torah-sod.git"  # Fixed typo: was .gitls
+  domain_name = "torah-sod.com"
+}
+
+# Data source to find the ACM certificate
+data "aws_acm_certificate" "wildcard" {
+  domain      = "*.${local.domain_name}"
+  statuses    = ["ISSUED"]
+  most_recent = true
 }
 
 # VPC Module
@@ -70,7 +78,7 @@ module "alb" {
   vpc_id                = module.vpc.vpc_id
   public_subnet_ids     = module.vpc.public_subnet_ids
   alb_security_group_id = module.security.alb_security_group_id
-  certificate_arn       = var.certificate_arn
+  certificate_arn       = data.aws_acm_certificate.wildcard.arn
 }
 
 # Generate a random password for RDS
@@ -125,4 +133,15 @@ module "ec2" {
   redis_host            = module.elasticache.redis_primary_endpoint
   docker_image_tag      = "dev"
   github_repo           = local.github_repo
+}
+
+# Route 53 Module
+module "route53" {
+  source = "../../modules/route53"
+
+  domain_name          = local.domain_name
+  alb_dns_name         = module.alb.alb_dns_name
+  alb_zone_id          = module.alb.alb_zone_id
+  environment          = local.environment
+  create_env_subdomain = true  # This will create dev.torah-sod.com
 }

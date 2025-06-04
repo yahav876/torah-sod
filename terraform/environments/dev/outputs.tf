@@ -17,7 +17,16 @@ output "redis_endpoint" {
 
 output "application_url" {
   description = "Application URL"
-  value       = "http://${module.alb.alb_dns_name}"
+  value       = "https://${module.route53.env_domain_record}"
+}
+
+output "domain_urls" {
+  description = "All configured domain URLs"
+  value = {
+    root = "https://${module.route53.root_domain_record}"
+    www  = "https://${module.route53.www_domain_record}"
+    env  = "https://${module.route53.env_domain_record}"
+  }
 }
 
 output "db_password_ssm_parameter" {
