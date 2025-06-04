@@ -10,6 +10,7 @@ from app.shared.metrics import search_requests_total
 from app.app_factory import limiter, cache
 import uuid
 import structlog
+from datetime import datetime
 
 logger = structlog.get_logger()
 
@@ -185,3 +186,12 @@ def health_check():
             'status': 'unhealthy',
             'error': str(e)
         }), 503
+
+
+@bp.route('/health/alb', methods=['GET'])
+def alb_health_check():
+    """Lightweight health check for ALB - no database check."""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat()
+    })

@@ -24,10 +24,10 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
+    unhealthy_threshold = 3      # Increased from 2 to 3 - more tolerance
+    timeout             = 10      # Increased from 5 to 10 seconds
     interval            = 30
-    path                = "/api/health"
+    path                = "/api/health/alb"  # Use lightweight health check
     matcher             = "200"
   }
 
