@@ -21,7 +21,7 @@ bp = Blueprint('api', __name__)
 @limiter.limit("20 per minute")
 @limiter.limit("100 per hour")
 def search():
-    """Perform synchronous search."""
+    """Perform ultra-fast indexed search."""
     try:
         data = request.get_json()
         if not data or 'phrase' not in data:
@@ -38,10 +38,14 @@ def search():
             }), 400
         
         # Log search request
-        logger.info("search_request", phrase=phrase, ip=get_remote_address())
+        logger.info("indexed_search_request", phrase=phrase, ip=get_remote_address())
         
-        # Check if we should do background search
+        # Use indexed search for ultra-fast performance
+        from app.services.indexed_search_service import IndexedSearchService
+        
         word_count = len(phrase.split())
+        
+        # Check if we should use background search for very complex queries
         if word_count > current_app.config.get('MAX_WORDS', 10):
             # Create background job
             job_id = str(uuid.uuid4())
@@ -60,13 +64,13 @@ def search():
             return jsonify({
                 'job_id': job_id,
                 'status': 'pending',
-                'message': 'Search queued for processing',
+                'message': 'Complex search queued for processing',
                 'success': True
             }), 202
         
-        # Perform synchronous search
-        with SearchService() as service:
-            result = service.search(phrase)
+        # Perform ultra-fast indexed search
+        search_service = IndexedSearchService()
+        result = search_service.search(phrase)
         
         # Record statistics
         try:
@@ -75,7 +79,7 @@ def search():
                 word_count=word_count,
                 search_time=result.get('search_time', 0),
                 results_count=result.get('total_variants', 0),
-                cache_hit=False,
+                cache_hit='cached' in result.get('search_method', ''),
                 client_ip=get_remote_address(),
                 user_agent=request.headers.get('User-Agent', '')
             )
@@ -87,7 +91,7 @@ def search():
         return jsonify(result)
         
     except Exception as e:
-        logger.error("api_search_error", error=str(e), exc_info=True)
+        logger.error("indexed_search_error", error=str(e), exc_info=True)
         return jsonify({'error': 'Internal server error', 'success': False}), 500
 
 
@@ -203,13 +207,17 @@ def performance_stats():
     """Get performance statistics for debugging."""
     try:
         from app.services.torah_service import TorahService
+        from app.models.database import TorahWord
         
         torah_service = TorahService()
+        word_index_count = TorahWord.query.count()
         
         stats = {
             'torah_lines_loaded': len(torah_service.get_torah_lines()),
             'torah_text_size_mb': round(len(torah_service.get_torah_text()) / 1024 / 1024, 2),
             'memory_cache_size': len(getattr(torah_service, '_search_cache', {})),
+            'word_index_count': word_index_count,
+            'index_ready': word_index_count > 0,
             'max_workers': current_app.config.get('MAX_WORKERS', 4),
             'batch_size_multiplier': current_app.config.get('BATCH_SIZE_MULTIPLIER', 100),
             'database_pool_size': current_app.config['SQLALCHEMY_ENGINE_OPTIONS']['pool_size'],
@@ -228,4 +236,48 @@ def performance_stats():
         return jsonify({
             'success': False,
             'error': 'Failed to get performance stats'
+        }), 500
+
+
+@bp.route('/admin/build-index', methods=['POST'])
+def build_search_index():
+    """Build the word-level search index for ultra-fast searches."""
+    try:
+        from app.services.indexed_search_service import build_word_index
+        from app.models.database import TorahVerse, TorahWord
+        
+        # Check if verses exist
+        verse_count = TorahVerse.query.count()
+        if verse_count == 0:
+            return jsonify({
+                'success': False,
+                'error': 'No Torah verses found. Please index Torah text first.'
+            }), 400
+        
+        # Check current index
+        current_word_count = TorahWord.query.count()
+        
+        logger.info("building_search_index", verse_count=verse_count, current_words=current_word_count)
+        
+        # Build the index
+        start_time = time.time()
+        words_indexed = build_word_index()
+        build_time = time.time() - start_time
+        
+        return jsonify({
+            'success': True,
+            'message': 'Search index built successfully',
+            'statistics': {
+                'verses_processed': verse_count,
+                'words_indexed': words_indexed,
+                'build_time_seconds': round(build_time, 2),
+                'words_per_second': round(words_indexed / build_time, 0) if build_time > 0 else 0
+            }
+        })
+        
+    except Exception as e:
+        logger.error("build_index_error", error=str(e), exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to build search index'
         }), 500

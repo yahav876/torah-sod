@@ -3,28 +3,35 @@ echo "🔍 Testing Torah-Sod Performance (t3.2xlarge: 8 vCPU, 32GB RAM)"
 echo "=================================================="
 
 echo "1. 📊 Checking performance configuration:"
-curl -s http://torah-sod-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/performance | jq '.performance_config | {max_workers, batch_size_multiplier, database_pool_size, redis_pool_size, torah_text_size_mb}'
+curl -s http://torah-sod-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/performance | jq '.performance_config | {max_workers, index_ready, word_index_count, database_pool_size, redis_pool_size, torah_text_size_mb}'
 
-echo "\n2. ⚡ Testing search speed (first time - no cache):"
-echo "Searching for 'אלהים'..."
+echo "\n2. ⚡ Testing indexed search speed (first time):"
+echo "Searching for 'אלהים' with new indexed search..."
 time curl -s -X POST http://torah-sod-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/search \
   -H "Content-Type: application/json" \
-  -d '{"phrase": "אלהים"}' | jq '{search_time, total_variants, success}'
+  -d '{"phrase": "אלהים"}' | jq '{search_time, total_variants, search_method, success}'
 
-echo "\n3. 🚀 Testing cached search (should be much faster):"
+echo "\n3. 🚀 Testing cached search (should be instant):"
 echo "Same search - should hit cache..."
 time curl -s -X POST http://torah-sod-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/search \
   -H "Content-Type: application/json" \
-  -d '{"phrase": "אלהים"}' | jq '{search_time, total_variants, success}'
+  -d '{"phrase": "אלהים"}' | jq '{search_time, total_variants, search_method, success}'
 
-echo "\n4. 📈 Performance comparison test:"
-echo "Testing complex search..."
+echo "\n4. 📈 Testing phrase search (2 words):"
+echo "Testing 'בראשית ברא' with indexed phrase search..."
 time curl -s -X POST http://torah-sod-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/search \
   -H "Content-Type: application/json" \
-  -d '{"phrase": "בראשית ברא אלהים"}' | jq '{search_time, total_variants, success}'
+  -d '{"phrase": "בראשית ברא"}' | jq '{search_time, total_variants, search_method, success}'
 
-echo "\n🎯 Expected Results with 12 Workers:"
-echo "- First search: ~2-5 seconds (with 12 workers vs 4)"
-echo "- Cached search: <100ms"
-echo "- Complex search: ~5-15 seconds (should be 3x faster than before)"
-echo "- Workers should be: 12 (optimal for 8 vCPU)"
+echo "\n5. 🧪 Testing longer phrase (3+ words):"
+echo "Testing 'בראשית ברא אלהים את השמים'..."
+time curl -s -X POST http://torah-sod-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/search \
+  -H "Content-Type: application/json" \
+  -d '{"phrase": "בראשית ברא אלהים את השמים"}' | jq '{search_time, total_variants, search_method, success}'
+
+echo "\n🎯 Expected Results with Database Indexing:"
+echo "- Single word: 50-200ms (vs 2-5 seconds before)"
+echo "- Phrase search: 100-500ms (vs 5-15 seconds before)" 
+echo "- Cached search: <50ms"
+echo "- Search method: 'single_word_index', 'phrase_index', or 'text_search'"
+echo "- NO MORE MEMORY KILLS! 🎉"

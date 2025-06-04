@@ -24,6 +24,9 @@ class TorahVerse(db.Model):
     word_count = db.Column(db.Integer, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Relationships
+    words = db.relationship('TorahWord', backref='verse', lazy='dynamic', cascade='all, delete-orphan')
+    
     # Composite indexes for faster searches
     __table_args__ = (
         Index('idx_book_chapter_verse', 'book', 'chapter', 'verse'),
@@ -40,6 +43,61 @@ class TorahVerse(db.Model):
             'text': self.text,
             'word_count': self.word_count
         }
+
+
+class TorahWord(db.Model):
+    """Model for individual words with position tracking for ultra-fast phrase searches."""
+    __tablename__ = 'torah_words'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    verse_id = db.Column(db.Integer, db.ForeignKey('torah_verses.id'), nullable=False, index=True)
+    word_original = db.Column(db.String(200), nullable=False)
+    word_normalized = db.Column(db.String(200), nullable=False, index=True)
+    word_position = db.Column(db.Integer, nullable=False)  # Position within verse
+    word_length = db.Column(db.Integer, nullable=False)
+    
+    # Advanced indexes for lightning-fast searches
+    __table_args__ = (
+        Index('idx_word_normalized_verse', 'word_normalized', 'verse_id'),
+        Index('idx_verse_position', 'verse_id', 'word_position'),
+        Index('idx_normalized_prefix', db.text('word_normalized varchar_pattern_ops')),  # For LIKE queries
+        Index('idx_word_search_combo', 'word_normalized', 'verse_id', 'word_position'),
+    )
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'verse_id': self.verse_id,
+            'word_original': self.word_original,
+            'word_normalized': self.word_normalized,
+            'position': self.word_position,
+            'length': self.word_length
+        }
+
+
+class TorahPhrase(db.Model):
+    """Model for pre-computed phrase searches (for commonly searched phrases)."""
+    __tablename__ = 'torah_phrases'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    phrase_normalized = db.Column(db.String(500), nullable=False, index=True)
+    phrase_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    word_count = db.Column(db.Integer, nullable=False)
+    occurrences_json = db.Column(db.Text)  # JSON array of verse locations
+    search_count = db.Column(db.Integer, default=1)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def get_occurrences(self):
+        """Get occurrences as Python list."""
+        if self.occurrences_json:
+            import json
+            return json.loads(self.occurrences_json)
+        return []
+    
+    def set_occurrences(self, occurrences):
+        """Set occurrences from Python list."""
+        import json
+        self.occurrences_json = json.dumps(occurrences)
 
 
 class SearchResult(db.Model):

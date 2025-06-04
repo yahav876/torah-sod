@@ -195,11 +195,23 @@ log_info "Starting Torah-Sod application..."
 docker compose -f docker-compose.aws.yml up -d || error_exit "Failed to start application containers"
 
 # Wait for containers to start
-sleep 10
+sleep 15
 
 # Check if containers are running
 log_info "Checking container status..."
 docker ps -a
+
+# Wait a bit more for application to fully initialize
+sleep 10
+
+# Build search index for ultra-fast performance
+log_info "Building search index for lightning-fast searches..."
+curl -X POST http://localhost/api/admin/build-index \
+  -H "Content-Type: application/json" \
+  --max-time 300 \
+  --retry 3 \
+  --retry-delay 10 \
+  2>/dev/null || log_info "Search index will be built on first search"
 
 # Create symlink for easier log access (don't fail if no containers yet)
 ln -sf /var/lib/docker/containers/*/torah-*.log /opt/torah-sod/logs/ 2>/dev/null || log_info "No Torah containers found yet"
