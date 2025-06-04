@@ -23,9 +23,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 8G
         reservations:
-          memory: 1G
+          memory: 4G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
