@@ -7,26 +7,45 @@ exec 2>&1
 
 echo "[$(date)] Starting user-data script execution..."
 
+# Function for error handling
+error_exit() {
+    echo "[$(date)] ERROR: $1" >&2
+    exit 1
+}
+
+# Function for logging with timestamp
+log_info() {
+    echo "[$(date)] INFO: $1"
+}
+
+log_info "User data script starting..."
+
 # Update system
-apt-get update
-apt-get upgrade -y
+log_info "Updating system packages..."
+apt-get update || error_exit "Failed to update package list"
+apt-get upgrade -y || error_exit "Failed to upgrade packages"
 
 # Install Docker
+log_info "Installing Docker..."
 apt-get install -y \
     ca-certificates \
     curl \
     gnupg \
-    lsb-release
+    lsb-release || error_exit "Failed to install Docker prerequisites"
 
 mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg || error_exit "Failed to add Docker GPG key"
 
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
   $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 apt-get update
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin || error_exit "Failed to install Docker"
+
+# Ensure Docker is running
+systemctl enable docker
+systemctl start docker || error_exit "Failed to start Docker"
 
 # Install AWS CLI
 apt-get install -y unzip
@@ -122,13 +141,23 @@ EOF
 
 # Create app directory and logs
 mkdir -p /opt/torah-sod
-mkdir -p /opt/torah-sod/logs
 mkdir -p /var/log/torah-sod
-cd /opt/torah-sod
 
-# Clone repository
-git clone ${github_repo} .
-git checkout dev
+# Clone repository (remove existing directory first if it exists)
+log_info "Cloning Torah-Sod repository..."
+cd /opt
+if [ -d "torah-sod" ]; then
+    log_info "Removing existing torah-sod directory..."
+    rm -rf torah-sod
+fi
+
+git clone ${github_repo} torah-sod || error_exit "Failed to clone repository"
+cd /opt/torah-sod
+git checkout dev || error_exit "Failed to checkout dev branch"
+
+# Create logs directory after clone
+mkdir -p logs
+log_info "Repository cloned successfully"
 
 # Create .env file
 cat > .env <<EOF
@@ -142,10 +171,8 @@ AWS_DEFAULT_REGION=${aws_region}
 FLASK_ENV=${environment}
 EOF
 
-# Login to ECR
-aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query Account --output text).dkr.ecr.${aws_region}.amazonaws.com
-
-# Configure Docker logging
+# Configure Docker logging first
+log_info "Configuring Docker logging..."
 cat > /etc/docker/daemon.json <<EOF
 {
   "log-driver": "json-file",
@@ -156,13 +183,26 @@ cat > /etc/docker/daemon.json <<EOF
 }
 EOF
 
-systemctl restart docker
+systemctl restart docker || error_exit "Failed to restart Docker"
+sleep 5  # Wait for Docker to fully restart
+
+# Login to ECR
+log_info "Logging into ECR..."
+aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query Account --output text).dkr.ecr.${aws_region}.amazonaws.com || error_exit "Failed to login to ECR"
 
 # Start the application with proper logging
-docker compose -f docker-compose.aws.yml up -d
+log_info "Starting Torah-Sod application..."
+docker compose -f docker-compose.aws.yml up -d || error_exit "Failed to start application containers"
 
-# Create symlink for easier log access
-ln -sf /var/lib/docker/containers/*/torah-*.log /opt/torah-sod/logs/
+# Wait for containers to start
+sleep 10
+
+# Check if containers are running
+log_info "Checking container status..."
+docker ps -a
+
+# Create symlink for easier log access (don't fail if no containers yet)
+ln -sf /var/lib/docker/containers/*/torah-*.log /opt/torah-sod/logs/ 2>/dev/null || log_info "No Torah containers found yet"
 
 # Setup log rotation
 cat > /etc/logrotate.d/torah-sod <<EOF
@@ -177,4 +217,7 @@ cat > /etc/logrotate.d/torah-sod <<EOF
 }
 EOF
 
-echo "Torah-Sod application deployment completed!"
+log_info "Torah-Sod application deployment completed!"
+log_info "Final container status:"
+docker ps
+log_info "User data script finished successfully"
