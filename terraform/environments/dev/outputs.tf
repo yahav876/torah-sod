@@ -43,3 +43,18 @@ output "acm_certificate_status" {
   description = "Status of the ACM certificate"
   value       = data.aws_acm_certificate.wildcard.status
 }
+
+output "launch_template_info" {
+  description = "Launch template version information"
+  value = {
+    id              = module.ec2.launch_template_id
+    latest_version  = module.ec2.launch_template_latest_version
+    default_version = module.ec2.launch_template_default_version
+    using_version   = "$Latest"
+  }
+}
+
+output "autoscaling_group_name" {
+  description = "Auto Scaling Group name for monitoring"
+  value       = module.ec2.autoscaling_group_name
+}

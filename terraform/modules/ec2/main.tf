@@ -82,7 +82,18 @@ resource "aws_autoscaling_group" "main" {
 
   launch_template {
     id      = aws_launch_template.main.id
-    version = "$Latest"
+    version = "$Latest"  # Always use the latest version for deployments
+  }
+  
+  # Force instance refresh when launch template changes
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+      instance_warmup        = 300
+      checkpoint_percentages = [50]
+    }
+    triggers = ["tag", "desired_capacity"]
   }
 
   enabled_metrics = [
@@ -110,6 +121,9 @@ resource "aws_autoscaling_group" "main" {
     value               = var.project_name
     propagate_at_launch = true
   }
+  
+  # Ensure latest launch template version is used
+  depends_on = [aws_launch_template.main]
 
   lifecycle {
     create_before_destroy = true
