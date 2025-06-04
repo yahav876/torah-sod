@@ -68,6 +68,11 @@ def setup_logging(app):
     return logger
 
 
+def get_logger():
+    """Get the configured structlog logger."""
+    return structlog.get_logger()
+
+
 class RequestLogger:
     """Middleware for request/response logging."""
     

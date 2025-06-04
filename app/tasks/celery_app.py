@@ -26,6 +26,7 @@ celery.conf.update(
     task_soft_time_limit=270,  # 4.5 minutes
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=100,
+    broker_connection_retry_on_startup=True,  # Suppress deprecation warning
 )
 
 # Auto-discover tasks

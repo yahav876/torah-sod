@@ -107,3 +107,16 @@ def track_search_metrics(search_type='web'):
 def track_cache_hit(cache_type='redis'):
     """Track cache hits."""
     cache_hits_total.labels(cache_type=cache_type).inc()
+
+
+def get_metrics():
+    """Get all defined metrics."""
+    return {
+        'search_requests_total': search_requests_total,
+        'search_duration_seconds': search_duration_seconds,
+        'active_searches': active_searches,
+        'cache_hits_total': cache_hits_total,
+        'torah_verses_indexed': torah_verses_indexed,
+        'search_phrase_length': search_phrase_length,
+        'results_found': results_found
+    }

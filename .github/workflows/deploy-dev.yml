@@ -1,0 +1,140 @@
+name: Deploy to Dev
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: torah-sod
+  ENVIRONMENT: dev
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.image.outputs.tag }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Create ECR repository if not exists
+      run: |
+        aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} || \
+        aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }}
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -f Dockerfile.optimized -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$ENVIRONMENT
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$ENVIRONMENT
+        echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  terraform:
+    name: Terraform Deploy
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.7
+
+    - name: Terraform Init
+      working-directory: ./terraform/environments/dev
+      run: terraform init
+
+    - name: Terraform Plan
+      working-directory: ./terraform/environments/dev
+      run: terraform plan -out=tfplan
+      env:
+        TF_VAR_docker_image_tag: ${{ needs.build-and-push.outputs.image-tag }}
+
+    - name: Terraform Apply
+      working-directory: ./terraform/environments/dev
+      run: terraform apply -auto-approve tfplan
+      env:
+        TF_VAR_docker_image_tag: ${{ needs.build-and-push.outputs.image-tag }}
+
+    - name: Get ALB DNS
+      working-directory: ./terraform/environments/dev
+      id: outputs
+      run: |
+        echo "alb_dns=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
+
+    - name: Update ASG with new image
+      run: |
+        ASG_NAME=$(aws autoscaling describe-auto-scaling-groups \
+          --query "AutoScalingGroups[?contains(AutoScalingGroupName, 'torah-sod-dev')].AutoScalingGroupName" \
+          --output text)
+        
+        aws autoscaling start-instance-refresh \
+          --auto-scaling-group-name $ASG_NAME \
+          --preferences '{"MinHealthyPercentage": 90, "InstanceWarmup": 60}'
+
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    needs: [terraform]
+    
+    steps:
+    - name: Wait for deployment
+      run: sleep 120
+
+    - name: Health check
+      run: |
+        for i in {1..10}; do
+          if curl -f http://${{ needs.terraform.outputs.alb_dns }}/api/health; then
+            echo "Health check passed!"
+            exit 0
+          fi
+          echo "Attempt $i failed, waiting..."
+          sleep 30
+        done
+        echo "Health check failed!"
+        exit 1
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [health-check]
+    if: always()
+    
+    steps:
+    - name: Send notification
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deployment to DEV successful!"
+        else
+          echo "❌ Deployment to DEV failed!"
+        fi

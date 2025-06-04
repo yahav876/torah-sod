@@ -13,7 +13,7 @@ backlog = 2048
 workers = multiprocessing.cpu_count() * 2 + 1
 worker_class = "sync"
 worker_connections = 1000
-timeout = 30
+timeout = 120  # Increased from 30 to handle heavy search operations
 keepalive = 2
 
 # Restart workers after this many requests, to help prevent memory leaks

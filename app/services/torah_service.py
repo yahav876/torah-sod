@@ -209,3 +209,14 @@ class TorahService:
         except Exception as e:
             db.session.rollback()
             logger.error("cache_store_error", error=str(e))
+
+
+def normalize_hebrew_text(text):
+    """Normalize Hebrew text for searching (standalone function for imports)."""
+    # Remove vowels and cantillation marks
+    normalized = re.sub(r'[\u0591-\u05C7]', '', text)
+    # Normalize final letters
+    final_to_regular = {'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ'}
+    for final, regular in final_to_regular.items():
+        normalized = normalized.replace(final, regular)
+    return normalized

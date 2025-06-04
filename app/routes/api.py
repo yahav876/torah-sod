@@ -159,7 +159,8 @@ def health_check():
     try:
         # Check database
         from app.models.database import db
-        db.session.execute('SELECT 1')
+        from sqlalchemy import text
+        db.session.execute(text('SELECT 1'))
         
         # Check Redis if configured
         redis_healthy = True
