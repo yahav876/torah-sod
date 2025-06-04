@@ -12,11 +12,20 @@ services:
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - MAX_WORKERS=8
+      - MAX_WORKERS=12  # Optimal for 8 vCPU: 1.5x CPU cores for I/O bound tasks
+      - BATCH_SIZE_MULTIPLIER=150  # Balanced batch size
+      - REDIS_POOL_SIZE=20
+      - REDIS_MAX_CONNECTIONS=40
       - PROMETHEUS_METRICS=true
     volumes:
       - ./torah.txt:/app/torah.txt:ro
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s

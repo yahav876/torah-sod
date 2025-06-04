@@ -133,12 +133,13 @@ class SearchService:
         return automaton
     
     def _search_parallel(self, automaton, lines, phrase_length, input_phrase, full_text):
-        """Perform parallel search across Torah text."""
+        """Perform parallel search across Torah text with AWS optimization."""
         grouped_matches = defaultdict(list)
         
-        # Split lines into batches
-        num_workers = current_app.config['MAX_WORKERS']
-        batch_size = max(1, len(lines) // num_workers)
+        # Optimize for t3.2xlarge (8 vCPU, 32GB RAM)
+        num_workers = current_app.config['MAX_WORKERS']  # Use full worker capacity
+        batch_multiplier = current_app.config.get('BATCH_SIZE_MULTIPLIER', 150)
+        batch_size = max(batch_multiplier, len(lines) // num_workers)
         batches = [lines[i:i+batch_size] for i in range(0, len(lines), batch_size)]
         
         # Use context manager for thread pool

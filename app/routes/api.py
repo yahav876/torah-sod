@@ -195,3 +195,37 @@ def alb_health_check():
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat()
     })
+
+
+@bp.route('/performance', methods=['GET'])
+@cache.cached(timeout=30)
+def performance_stats():
+    """Get performance statistics for debugging."""
+    try:
+        from app.services.torah_service import TorahService
+        
+        torah_service = TorahService()
+        
+        stats = {
+            'torah_lines_loaded': len(torah_service.get_torah_lines()),
+            'torah_text_size_mb': round(len(torah_service.get_torah_text()) / 1024 / 1024, 2),
+            'memory_cache_size': len(getattr(torah_service, '_search_cache', {})),
+            'max_workers': current_app.config.get('MAX_WORKERS', 4),
+            'batch_size_multiplier': current_app.config.get('BATCH_SIZE_MULTIPLIER', 100),
+            'database_pool_size': current_app.config['SQLALCHEMY_ENGINE_OPTIONS']['pool_size'],
+            'redis_pool_size': current_app.config.get('REDIS_CONNECTION_POOL_SIZE', 20),
+            'environment': current_app.config.get('FLASK_ENV', 'unknown'),
+            'search_timeout': current_app.config.get('SEARCH_TIMEOUT', 300)
+        }
+        
+        return jsonify({
+            'success': True,
+            'performance_config': stats
+        })
+        
+    except Exception as e:
+        logger.error("performance_stats_error", error=str(e))
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get performance stats'
+        }), 500

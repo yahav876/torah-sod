@@ -24,6 +24,8 @@ class TorahService:
     _torah_lines = None
     _torah_text = None
     _verse_cache = {}
+    _search_cache = {}  # In-memory search cache
+    _max_cache_size = 1000
     
     def __new__(cls):
         if cls._instance is None:
@@ -43,18 +45,24 @@ class TorahService:
                 cls._initialized = True
     
     def _load_torah_text(self):
-        """Load Torah text from file."""
+        """Load Torah text from file with preloading optimization."""
         try:
             torah_file = current_app.config['TORAH_FILE']
             if not os.path.exists(torah_file):
                 logger.error("torah_file_not_found", path=torah_file)
                 return
             
+            # Pre-read entire file for better performance
             with open(torah_file, encoding="utf-8") as f:
-                self._torah_lines = f.readlines()
-                self._torah_text = ''.join(self._torah_lines)
+                content = f.read()
+                self._torah_lines = content.splitlines(keepends=True)
+                self._torah_text = content
             
-            logger.info("torah_text_loaded", lines=len(self._torah_lines))
+            # Pre-process for faster searching
+            self._normalized_lines = [self._normalize_text(line) for line in self._torah_lines]
+            
+            logger.info("torah_text_loaded", lines=len(self._torah_lines), 
+                       size_mb=len(content) / 1024 / 1024)
         except Exception as e:
             logger.error("torah_load_error", error=str(e), exc_info=True)
     
@@ -158,12 +166,17 @@ class TorahService:
             return []
     
     def get_cached_result(self, search_phrase):
-        """Get cached search result."""
+        """Get cached search result with memory-first approach."""
         try:
+            # Check in-memory cache first (fastest)
+            if search_phrase in self._search_cache:
+                track_cache_hit('memory')
+                return self._search_cache[search_phrase]
+            
             # Create hash of search phrase
             search_hash = hashlib.sha256(search_phrase.encode()).hexdigest()
             
-            # Look for cached result
+            # Look for cached result in database
             cached = SearchResult.query.filter_by(search_hash=search_hash).first()
             
             if cached:
@@ -172,15 +185,28 @@ class TorahService:
                 cached.last_accessed = db.func.now()
                 db.session.commit()
                 
-                track_cache_hit('database')
+                result = json.loads(cached.results_json)
                 
-                return json.loads(cached.results_json)
+                # Store in memory cache for next time
+                self._add_to_memory_cache(search_phrase, result)
+                
+                track_cache_hit('database')
+                return result
             
             return None
             
         except Exception as e:
             logger.error("cache_lookup_error", error=str(e))
             return None
+    
+    def _add_to_memory_cache(self, search_phrase, result):
+        """Add result to in-memory cache with size limit."""
+        if len(self._search_cache) >= self._max_cache_size:
+            # Remove oldest entry (simple FIFO)
+            oldest_key = next(iter(self._search_cache))
+            del self._search_cache[oldest_key]
+        
+        self._search_cache[search_phrase] = result
     
     def cache_result(self, search_phrase, results, search_time):
         """Cache search results."""
