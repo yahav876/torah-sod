@@ -33,3 +33,13 @@ output "db_password_ssm_parameter" {
   description = "SSM parameter name for database password"
   value       = module.rds.db_password_ssm_parameter
 }
+
+output "route53_name_servers" {
+  description = "Name servers for the Route53 hosted zone - update your domain registrar with these"
+  value       = module.route53_zone.name_servers
+}
+
+output "acm_certificate_status" {
+  description = "Status of the ACM certificate"
+  value       = data.aws_acm_certificate.wildcard.status
+}

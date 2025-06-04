@@ -41,10 +41,19 @@ locals {
   domain_name = "torah-sod.com"
 }
 
-# Data source to find the ACM certificate
+# Create Route53 Hosted Zone first
+module "route53_zone" {
+  source = "../../modules/route53-zone"
+
+  domain_name  = local.domain_name
+  environment  = local.environment
+  project_name = var.project_name
+}
+
+# Data source to find the ACM certificate (including PENDING_VALIDATION)
 data "aws_acm_certificate" "wildcard" {
   domain      = "*.${local.domain_name}"
-  statuses    = ["ISSUED"]
+  statuses    = ["ISSUED", "PENDING_VALIDATION"]
   most_recent = true
 }
 
@@ -78,7 +87,7 @@ module "alb" {
   vpc_id                = module.vpc.vpc_id
   public_subnet_ids     = module.vpc.public_subnet_ids
   alb_security_group_id = module.security.alb_security_group_id
-  certificate_arn       = data.aws_acm_certificate.wildcard.arn
+  certificate_arn       = data.aws_acm_certificate.wildcard.status == "ISSUED" ? data.aws_acm_certificate.wildcard.arn : ""
 }
 
 # Generate a random password for RDS
