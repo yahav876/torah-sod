@@ -77,6 +77,7 @@ module "alb" {
 resource "random_password" "db" {
   length  = 32
   special = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"  # Exclude /, @, ", and space
 }
 
 # RDS Module

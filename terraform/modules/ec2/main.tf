@@ -225,3 +225,15 @@ resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-${var.environment}-ec2-profile"
   role = aws_iam_role.ec2.name
 }
+
+# CloudWatch Log Group
+resource "aws_cloudwatch_log_group" "ec2" {
+  name              = "/aws/ec2/${var.project_name}-${var.environment}"
+  retention_in_days = 7
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-logs"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}

@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# Redirect all output to a log file and CloudWatch
+exec > >(tee -a /var/log/user-data.log)
+exec 2>&1
+
+echo "[$(date)] Starting user-data script execution..."
+
 # Update system
 apt-get update
 apt-get upgrade -y
@@ -81,6 +87,18 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             "log_group_name": "/aws/ec2/${project_name}-${environment}",
             "log_stream_name": "{instance_id}/docker",
             "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/user-data.log",
+            "log_group_name": "/aws/ec2/${project_name}-${environment}",
+            "log_stream_name": "{instance_id}/user-data",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/cloud-init-output.log",
+            "log_group_name": "/aws/ec2/${project_name}-${environment}",
+            "log_stream_name": "{instance_id}/cloud-init",
+            "timezone": "UTC"
           }
         ]
       }
@@ -120,7 +138,7 @@ EOF
 aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query Account --output text).dkr.ecr.${aws_region}.amazonaws.com
 
 # Start the application
-docker compose -f docker-compose.production.yml up -d
+docker compose -f docker-compose.aws.yml up -d
 
 # Setup log rotation
 cat > /etc/logrotate.d/torah-sod <<EOF
