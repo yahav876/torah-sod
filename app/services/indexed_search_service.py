@@ -25,15 +25,9 @@ class IndexedSearchService:
     
     @track_search_metrics('indexed')
     def search(self, phrase, use_cache=True, partial_results_callback=None):
-        """Perform lightning-fast indexed search."""
+        """Perform direct text search instead of indexed search."""
         try:
             start_time = time.time()
-            
-            # Try to use the same approach as in-memory search for consistency
-            # First try indexed search, then fall back to direct text search if no results
-            
-            # For short phrases (1-2 words), try both methods and combine results
-            is_short_phrase = len(phrase.split()) <= 2
             
             # Validate input
             if not phrase or len(phrase) > current_app.config['MAX_PHRASE_LENGTH']:
@@ -53,38 +47,9 @@ class IndexedSearchService:
                     logger.info("indexed_cache_hit", phrase=phrase)
                     return cached_result
             
-            # Normalize search phrase
-            normalized_phrase = self._normalize_text(phrase)
-            words = self._split_into_words(normalized_phrase)
-            
-            # Choose search strategy based on phrase complexity
-            if len(words) == 1:
-                # For single words, try indexed search first
-                results = self._search_single_word(words[0], phrase, partial_results_callback)
-                
-                # If no results, fall back to direct text search
-                if len(results['results']) == 0:
-                    logger.info("single_word_fallback_to_text_search", word=words[0])
-                    text_results = self._search_text_directly(phrase, partial_results_callback)
-                    
-                    # If text search found results, use those instead
-                    if len(text_results['results']) > 0:
-                        results = text_results
-            elif len(words) <= 3:
-                # For short phrases, try phrase indexed search
-                results = self._search_phrase_indexed(words, phrase, partial_results_callback)
-                
-                # If no results, fall back to direct text search
-                if len(results['results']) == 0:
-                    logger.info("phrase_fallback_to_text_search", phrase=phrase)
-                    text_results = self._search_text_directly(phrase, partial_results_callback)
-                    
-                    # If text search found results, use those instead
-                    if len(text_results['results']) > 0:
-                        results = text_results
-            else:
-                # For long phrases, use text search directly
-                results = self._search_long_phrase(words, phrase, partial_results_callback)
+            # Always use direct text search as requested by user
+            logger.info("using_direct_text_search", phrase=phrase)
+            results = self._search_text_directly(phrase, partial_results_callback)
             
             search_time = time.time() - start_time
             
