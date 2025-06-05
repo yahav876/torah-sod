@@ -68,16 +68,32 @@ def search():
                 'success': True
             }), 202
         
-        # Choose search service based on type
-        if search_type == 'memory':
+        # For indexed search, always use background processing to avoid timeouts
+        if search_type == 'indexed':
+            # Create background job
+            job_id = str(uuid.uuid4())
+            job = SearchJob(
+                job_id=job_id,
+                search_phrase=phrase,
+                status='pending',
+                client_ip=get_remote_address()
+            )
+            db.session.add(job)
+            db.session.commit()
+            
+            # Queue background task
+            perform_background_search.delay(job_id, phrase, search_type)
+            
+            return jsonify({
+                'job_id': job_id,
+                'status': 'pending',
+                'message': 'Search queued for processing',
+                'success': True
+            }), 202
+        else:
             # Use in-memory search
             with SearchService() as search_service:
                 result = search_service.search(phrase)
-        else:
-            # Use indexed search (default)
-            from app.services.indexed_search_service import IndexedSearchService
-            search_service = IndexedSearchService()
-            result = search_service.search(phrase)
         
         # Record statistics
         try:
