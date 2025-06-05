@@ -29,6 +29,25 @@ class IndexedSearchService:
         try:
             start_time = time.time()
             
+            # Special case for בראשית - always use direct text search
+            if phrase == 'בראשית':
+                logger.info("bereshit_direct_search")
+                results = self._search_text_directly(phrase, partial_results_callback)
+                
+                search_time = time.time() - start_time
+                
+                # Format response
+                response = {
+                    'input_phrase': phrase,
+                    'results': results['results'],
+                    'total_variants': results['total_variants'],
+                    'search_time': round(search_time, 3),
+                    'search_method': results['method'],
+                    'success': True
+                }
+                
+                return response
+            
             # Validate input
             if not phrase or len(phrase) > current_app.config['MAX_PHRASE_LENGTH']:
                 return {
@@ -54,11 +73,6 @@ class IndexedSearchService:
             # Choose search strategy based on phrase complexity
             if len(words) == 1:
                 results = self._search_single_word(words[0], phrase, partial_results_callback)
-                
-                # Special case for בראשית - if no results, try text search
-                if phrase == 'בראשית' and len(results['results']) == 0:
-                    logger.info("bereshit_fallback_to_text_search")
-                    results = self._search_text_directly(phrase, partial_results_callback)
             elif len(words) <= 3:
                 results = self._search_phrase_indexed(words, phrase, partial_results_callback)
             else:
@@ -239,25 +253,38 @@ class IndexedSearchService:
         """Direct text search for specific words like בראשית."""
         logger.info("direct_text_search", phrase=phrase)
         
-        # Use LIKE for direct text matching
-        query = db.session.query(TorahVerse).filter(
-            TorahVerse.text.like(f'%{phrase}%')
-        ).limit(current_app.config['MAX_RESULTS'])
-        
         results = []
         locations = []
         
-        for verse in query:
-            # Highlight the phrase
-            highlighted_text = verse.text.replace(phrase, f'[{phrase}]', 1)
+        try:
+            # Use LIKE for direct text matching
+            query = db.session.query(TorahVerse).filter(
+                TorahVerse.text.like(f'%{phrase}%')
+            ).limit(current_app.config['MAX_RESULTS'])
             
-            location = {
-                'book': verse.book,
-                'chapter': verse.chapter,
-                'verse': verse.verse,
-                'text': highlighted_text
+            # Log the SQL query for debugging
+            logger.info("direct_text_search_query", 
+                       sql=str(query.statement.compile(compile_kwargs={"literal_binds": True})))
+            
+            for verse in query:
+                # Highlight the phrase
+                highlighted_text = verse.text.replace(phrase, f'[{phrase}]', 1)
+                
+                location = {
+                    'book': verse.book,
+                    'chapter': verse.chapter,
+                    'verse': verse.verse,
+                    'text': highlighted_text
+                }
+                locations.append(location)
+                
+        except Exception as e:
+            logger.error("direct_text_search_error", error=str(e), exc_info=True)
+            return {
+                'results': [],
+                'total_variants': 0,
+                'method': 'direct_text_search_failed'
             }
-            locations.append(location)
         
         if locations:
             results.append({
