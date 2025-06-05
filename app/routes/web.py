@@ -124,7 +124,8 @@ def get_main_template():
             padding: 5px;
             margin: 10px 0;
             position: relative;
-            width: 300px;
+            width: 400px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
         .toggle-option {
@@ -135,6 +136,7 @@ def get_main_template():
             z-index: 1;
             transition: color 0.3s ease;
             border-radius: 25px;
+            font-weight: bold;
         }
         
         .toggle-option.active {
@@ -150,10 +152,19 @@ def get_main_template():
             background: #3498db;
             border-radius: 25px;
             transition: transform 0.3s ease;
+            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.5);
         }
         
         .toggle-slider.right {
             transform: translateX(100%);
+        }
+        
+        .toggle-help {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-top: 5px;
+            font-style: italic;
         }
         
         #loading {
@@ -172,6 +183,23 @@ def get_main_template():
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-left: 10px;
+        }
+        
+        #cancelBtn {
+            display: none;
+            padding: 8px 15px;
+            background: #95a5a6;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.2s;
+        }
+        
+        #cancelBtn:hover {
+            background: #7f8c8d;
         }
         
         .progress-container {
@@ -300,11 +328,17 @@ def get_main_template():
                     <div id="memoryOption" class="toggle-option" onclick="setSearchType('memory')">חיפוש בזיכרון</div>
                     <div class="toggle-slider"></div>
                 </div>
+                <div class="toggle-help">
+                    הכחול מציין את שיטת החיפוש הנבחרת - לחץ על אחת האפשרויות כדי להחליף
+                </div>
             </div>
             
             <div id="loading">
                 מחפש...
                 <div class="spinner"></div>
+                <div>
+                    <button id="cancelBtn" onclick="cancelSearch()">ביטול חיפוש</button>
+                </div>
             </div>
             
             <div class="progress-container" id="progressContainer">
@@ -323,6 +357,7 @@ def get_main_template():
         let searchJobId = null;
         let progressInterval = null;
         let partialResults = [];
+        let abortController = null;
         
         // Set up search type toggle
         function setSearchType(type) {
@@ -357,6 +392,7 @@ def get_main_template():
             
             isSearching = true;
             document.getElementById('loading').style.display = 'block';
+            document.getElementById('cancelBtn').style.display = 'inline-block';
             document.getElementById('results').innerHTML = '';
             document.getElementById('partialResults').innerHTML = '';
             document.getElementById('searchBtn').disabled = true;
@@ -367,6 +403,10 @@ def get_main_template():
             partialResults = [];
             
             try {
+                // Create a new AbortController for this search
+                abortController = new AbortController();
+                const signal = abortController.signal;
+                
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: {
@@ -375,7 +415,8 @@ def get_main_template():
                     body: JSON.stringify({ 
                         phrase: query,
                         search_type: searchType
-                    })
+                    }),
+                    signal: signal
                 });
                 
                 const data = await response.json();
@@ -395,10 +436,22 @@ def get_main_template():
                 document.getElementById('results').innerHTML = 
                     '<div class="error">שגיאה בחיפוש: ' + error.message + '</div>';
                 document.getElementById('progressContainer').style.display = 'none';
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    document.getElementById('results').innerHTML = 
+                        '<div class="error">החיפוש בוטל על ידי המשתמש</div>';
+                    document.getElementById('progressContainer').style.display = 'none';
+                } else {
+                    console.error('Error:', error);
+                    document.getElementById('results').innerHTML = 
+                        '<div class="error">שגיאה בחיפוש: ' + error.message + '</div>';
+                    document.getElementById('progressContainer').style.display = 'none';
+                }
             } finally {
                 if (!searchJobId) {
                     isSearching = false;
                     document.getElementById('loading').style.display = 'none';
+                    document.getElementById('cancelBtn').style.display = 'none';
                     document.getElementById('searchBtn').disabled = false;
                 }
             }
@@ -446,6 +499,7 @@ def get_main_template():
                         searchJobId = null;
                         isSearching = false;
                         document.getElementById('loading').style.display = 'none';
+                        document.getElementById('cancelBtn').style.display = 'none';
                         document.getElementById('searchBtn').disabled = false;
                         document.getElementById('progressContainer').style.display = 'none';
                         document.getElementById('partialResults').innerHTML = '';
@@ -461,6 +515,7 @@ def get_main_template():
                         searchJobId = null;
                         isSearching = false;
                         document.getElementById('loading').style.display = 'none';
+                        document.getElementById('cancelBtn').style.display = 'none';
                         document.getElementById('searchBtn').disabled = false;
                         document.getElementById('progressContainer').style.display = 'none';
                         document.getElementById('partialResults').innerHTML = '';
@@ -474,6 +529,37 @@ def get_main_template():
         
         function updateProgressBar(progress) {
             document.getElementById('progressBar').style.width = `${progress}%`;
+        }
+        
+        // Function to cancel an ongoing search
+        function cancelSearch() {
+            if (!isSearching) return;
+            
+            // If using AbortController for fetch
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
+            
+            // If using a background job
+            if (searchJobId) {
+                // Clear the polling interval
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
+                
+                // Update UI
+                searchJobId = null;
+                isSearching = false;
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('cancelBtn').style.display = 'none';
+                document.getElementById('searchBtn').disabled = false;
+                document.getElementById('progressContainer').style.display = 'none';
+                document.getElementById('partialResults').innerHTML = '';
+                document.getElementById('results').innerHTML = 
+                    '<div class="error">החיפוש בוטל על ידי המשתמש</div>';
+            }
         }
         
         function updatePartialResults(newResults) {
