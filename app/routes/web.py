@@ -123,7 +123,6 @@ def get_main_template():
             border-radius: 30px;
             padding: 5px;
             margin: 10px 0;
-            position: relative;
             width: 400px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
@@ -133,30 +132,16 @@ def get_main_template():
             padding: 10px;
             text-align: center;
             cursor: pointer;
-            z-index: 1;
-            transition: color 0.3s ease;
             border-radius: 25px;
             font-weight: bold;
+            transition: all 0.3s ease;
+            margin: 0 2px;
         }
         
         .toggle-option.active {
+            background-color: #3498db;
             color: white;
-        }
-        
-        .toggle-slider {
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            width: calc(50% - 5px);
-            height: calc(100% - 10px);
-            background: #3498db;
-            border-radius: 25px;
-            transition: transform 0.3s ease;
             box-shadow: 0 2px 8px rgba(52, 152, 219, 0.5);
-        }
-        
-        .toggle-slider.right {
-            transform: translateX(100%);
         }
         
         .toggle-help {
@@ -326,10 +311,9 @@ def get_main_template():
                 <div class="toggle-container">
                     <div id="indexedOption" class="toggle-option active" onclick="setSearchType('indexed')">חיפוש מאגר נתונים</div>
                     <div id="memoryOption" class="toggle-option" onclick="setSearchType('memory')">חיפוש בזיכרון</div>
-                    <div class="toggle-slider"></div>
                 </div>
                 <div class="toggle-help">
-                    הכחול מציין את שיטת החיפוש הנבחרת - לחץ על אחת האפשרויות כדי להחליף
+                    לחץ על אחת האפשרויות כדי לבחור שיטת חיפוש - האפשרות הכחולה היא הנבחרת
                 </div>
             </div>
             
@@ -367,11 +351,9 @@ def get_main_template():
             if (type === 'indexed') {
                 document.getElementById('indexedOption').classList.add('active');
                 document.getElementById('memoryOption').classList.remove('active');
-                document.querySelector('.toggle-slider').classList.remove('right');
             } else {
                 document.getElementById('indexedOption').classList.remove('active');
                 document.getElementById('memoryOption').classList.add('active');
-                document.querySelector('.toggle-slider').classList.add('right');
             }
         }
         
