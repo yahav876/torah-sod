@@ -224,6 +224,50 @@ def alb_health_check():
     })
 
 
+@bp.route('/admin/clear-cache', methods=['POST'])
+def clear_cache():
+    """Clear all cached searches from Redis and database."""
+    try:
+        # Clear Redis cache
+        from app.shared.redis_client import get_redis_client
+        redis = get_redis_client()
+        if redis:
+            # Clear search cache keys
+            search_keys = redis.keys('*search*')
+            if search_keys:
+                redis.delete(*search_keys)
+            
+            # Clear partial results
+            partial_keys = redis.keys('partial_results:*')
+            if partial_keys:
+                redis.delete(*partial_keys)
+            
+            # Clear Flask-Caching keys
+            cache_keys = redis.keys('flask_cache*')
+            if cache_keys:
+                redis.delete(*cache_keys)
+        
+        # Clear database cache
+        from app.models.database import db, SearchResult, SearchCache
+        SearchResult.query.delete()
+        SearchCache.query.delete()
+        db.session.commit()
+        
+        logger.info("cache_cleared", source="admin_request")
+        
+        return jsonify({
+            'success': True,
+            'message': 'All search caches cleared successfully'
+        })
+        
+    except Exception as e:
+        logger.error("cache_clear_error", error=str(e))
+        return jsonify({
+            'success': False,
+            'error': f'Failed to clear cache: {str(e)}'
+        }), 500
+
+
 @bp.route('/performance', methods=['GET'])
 @cache.cached(timeout=30)
 def performance_stats():

@@ -122,6 +122,26 @@ def get_main_template():
             text-align: center;
         }
         
+        .admin-options {
+            margin-top: 30px;
+            text-align: center;
+        }
+        
+        .admin-btn {
+            padding: 8px 15px;
+            background: #34495e;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .admin-btn:hover {
+            background: #2c3e50;
+        }
+        
         .toggle-container {
             display: flex;
             background: #f1f1f1;
@@ -341,6 +361,10 @@ def get_main_template():
             <div id="partialResults" class="partial-results"></div>
             
             <div id="results"></div>
+            
+            <div class="admin-options">
+                <button id="clearCacheBtn" class="admin-btn" onclick="clearCache()">נקה את המטמון</button>
+            </div>
         </div>
     </div>
 
@@ -607,6 +631,34 @@ def get_main_template():
             });
             
             resultsDiv.innerHTML = html;
+        }
+        
+        // Function to clear all search caches
+        async function clearCache() {
+            if (!confirm('האם אתה בטוח שברצונך לנקות את כל המטמון? פעולה זו תמחק את כל תוצאות החיפוש השמורות.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/clear-cache', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('המטמון נוקה בהצלחה!');
+                } else {
+                    alert('שגיאה בניקוי המטמון: ' + (data.error || 'שגיאה לא ידועה'));
+                }
+                
+            } catch (error) {
+                console.error('Error clearing cache:', error);
+                alert('שגיאה בניקוי המטמון: ' + error.message);
+            }
         }
     </script>
 </body>
