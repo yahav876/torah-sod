@@ -414,11 +414,6 @@ def get_main_template():
                 }
                 
             } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('results').innerHTML = 
-                    '<div class="error">שגיאה בחיפוש: ' + error.message + '</div>';
-                document.getElementById('progressContainer').style.display = 'none';
-            } catch (error) {
                 if (error.name === 'AbortError') {
                     document.getElementById('results').innerHTML = 
                         '<div class="error">החיפוש בוטל על ידי המשתמש</div>';
