@@ -123,23 +123,30 @@ def get_main_template():
         }
         
         .admin-options {
-            margin-top: 30px;
+            margin-top: 50px;
+            margin-bottom: 30px;
             text-align: center;
+            padding: 20px;
+            border-top: 1px dashed #ccc;
         }
         
         .admin-btn {
-            padding: 8px 15px;
-            background: #34495e;
+            padding: 12px 25px;
+            background: #e67e22;
             color: white;
-            border: none;
+            border: 2px solid #d35400;
             border-radius: 15px;
-            font-size: 14px;
+            font-size: 16px;
+            font-weight: bold;
             cursor: pointer;
             transition: all 0.2s;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
         }
         
         .admin-btn:hover {
-            background: #2c3e50;
+            background: #d35400;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 10px rgba(0,0,0,0.2);
         }
         
         .toggle-container {
@@ -363,6 +370,7 @@ def get_main_template():
             <div id="results"></div>
             
             <div class="admin-options">
+                <div style="margin-bottom: 10px; font-weight: bold;">ניהול מערכת</div>
                 <button id="clearCacheBtn" class="admin-btn" onclick="clearCache()">נקה את המטמון</button>
             </div>
         </div>
