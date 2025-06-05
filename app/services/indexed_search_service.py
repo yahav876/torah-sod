@@ -29,24 +29,11 @@ class IndexedSearchService:
         try:
             start_time = time.time()
             
-            # Special case for בראשית - always use direct text search
-            if phrase == 'בראשית':
-                logger.info("bereshit_direct_search")
-                results = self._search_text_directly(phrase, partial_results_callback)
-                
-                search_time = time.time() - start_time
-                
-                # Format response
-                response = {
-                    'input_phrase': phrase,
-                    'results': results['results'],
-                    'total_variants': results['total_variants'],
-                    'search_time': round(search_time, 3),
-                    'search_method': results['method'],
-                    'success': True
-                }
-                
-                return response
+            # Try to use the same approach as in-memory search for consistency
+            # First try indexed search, then fall back to direct text search if no results
+            
+            # For short phrases (1-2 words), try both methods and combine results
+            is_short_phrase = len(phrase.split()) <= 2
             
             # Validate input
             if not phrase or len(phrase) > current_app.config['MAX_PHRASE_LENGTH']:
@@ -72,10 +59,31 @@ class IndexedSearchService:
             
             # Choose search strategy based on phrase complexity
             if len(words) == 1:
+                # For single words, try indexed search first
                 results = self._search_single_word(words[0], phrase, partial_results_callback)
+                
+                # If no results, fall back to direct text search
+                if len(results['results']) == 0:
+                    logger.info("single_word_fallback_to_text_search", word=words[0])
+                    text_results = self._search_text_directly(phrase, partial_results_callback)
+                    
+                    # If text search found results, use those instead
+                    if len(text_results['results']) > 0:
+                        results = text_results
             elif len(words) <= 3:
+                # For short phrases, try phrase indexed search
                 results = self._search_phrase_indexed(words, phrase, partial_results_callback)
+                
+                # If no results, fall back to direct text search
+                if len(results['results']) == 0:
+                    logger.info("phrase_fallback_to_text_search", phrase=phrase)
+                    text_results = self._search_text_directly(phrase, partial_results_callback)
+                    
+                    # If text search found results, use those instead
+                    if len(text_results['results']) > 0:
+                        results = text_results
             else:
+                # For long phrases, use text search directly
                 results = self._search_long_phrase(words, phrase, partial_results_callback)
             
             search_time = time.time() - start_time
@@ -350,17 +358,17 @@ class IndexedSearchService:
         }
     
     def _generate_word_variants(self, word):
-        """Generate a limited set of most common Hebrew variants."""
-        # Use existing letter mappings but limit the variants for performance
+        """Generate variants for Hebrew words."""
+        # Use existing letter mappings with increased limit
         try:
             all_variants = self.letter_mappings.generate_all_variants(word)
             
-            # Special case for בראשית - don't limit variants
-            if word == 'בראשית':
+            # Don't limit variants for important words or short words
+            if len(word) <= 3 or word in ['בראשית', 'אלהים', 'יהוה', 'משה', 'אברהם', 'יצחק', 'יעקב', 'ישראל']:
                 return list(set([variant for variant, _ in all_variants]))
             
-            # Limit to most common variants (first 100) to prevent memory explosion
-            limited_variants = list(set([variant for variant, _ in all_variants[:100]]))
+            # Increased limit to 200 variants for better coverage
+            limited_variants = list(set([variant for variant, _ in all_variants[:200]]))
             return limited_variants
         except Exception as e:
             logger.error("variant_generation_error", word=word, error=str(e))
