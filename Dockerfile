@@ -37,7 +37,7 @@ COPY --from=builder /root/.local /home/torah_user/.local
 COPY --chown=torah_user:torah_user . .
 
 # Make scripts executable
-RUN chmod +x start_server.sh
+RUN chmod +x start.sh
 
 # Switch to non-root user
 USER torah_user

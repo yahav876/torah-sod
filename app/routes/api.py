@@ -21,7 +21,7 @@ bp = Blueprint('api', __name__)
 @limiter.limit("20 per minute")
 @limiter.limit("100 per hour")
 def search():
-    """Perform ultra-fast indexed search."""
+    """Perform search with selectable mechanism."""
     try:
         data = request.get_json()
         if not data or 'phrase' not in data:
@@ -37,11 +37,11 @@ def search():
                 'success': False
             }), 400
         
-        # Log search request
-        logger.info("indexed_search_request", phrase=phrase, ip=get_remote_address())
+        # Get search type (default to indexed)
+        search_type = data.get('search_type', 'indexed')
         
-        # Use indexed search for ultra-fast performance
-        from app.services.indexed_search_service import IndexedSearchService
+        # Log search request
+        logger.info("search_request", phrase=phrase, type=search_type, ip=get_remote_address())
         
         word_count = len(phrase.split())
         
@@ -59,7 +59,7 @@ def search():
             db.session.commit()
             
             # Queue background task
-            perform_background_search.delay(job_id, phrase)
+            perform_background_search.delay(job_id, phrase, search_type)
             
             return jsonify({
                 'job_id': job_id,
@@ -68,9 +68,16 @@ def search():
                 'success': True
             }), 202
         
-        # Perform ultra-fast indexed search
-        search_service = IndexedSearchService()
-        result = search_service.search(phrase)
+        # Choose search service based on type
+        if search_type == 'memory':
+            # Use in-memory search
+            with SearchService() as search_service:
+                result = search_service.search(phrase)
+        else:
+            # Use indexed search (default)
+            from app.services.indexed_search_service import IndexedSearchService
+            search_service = IndexedSearchService()
+            result = search_service.search(phrase)
         
         # Record statistics
         try:
@@ -106,13 +113,29 @@ def search_status(job_id):
         
         response = job.to_dict()
         
-        # If completed, include results
+        # Include partial results if available
+        from app.models.database import SearchResult
+        
+        # If completed, include full results
         if job.status == 'completed' and job.result_id:
-            from app.models.database import SearchResult
             result = SearchResult.query.get(job.result_id)
             if result:
                 import json
                 response['results'] = json.loads(result.results_json)
+        # If still running, include any partial results
+        elif job.status == 'running':
+            # Get partial results from Redis if available
+            try:
+                from app.shared.redis_client import get_redis_client
+                redis = get_redis_client()
+                partial_key = f"partial_results:{job_id}"
+                partial_results = redis.get(partial_key)
+                
+                if partial_results:
+                    import json
+                    response['partial_results'] = json.loads(partial_results)
+            except Exception as e:
+                logger.error("partial_results_error", error=str(e))
         
         return jsonify(response)
         

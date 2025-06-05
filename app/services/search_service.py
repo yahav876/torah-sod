@@ -35,7 +35,7 @@ class SearchService:
             self.executor.shutdown(wait=True)
     
     @track_search_metrics('web')
-    def search(self, phrase, use_cache=True):
+    def search(self, phrase, use_cache=True, partial_results_callback=None):
         """Perform search with caching and metrics."""
         try:
             # Validate input
@@ -58,7 +58,7 @@ class SearchService:
             
             # Perform search
             start_time = time.time()
-            results = self._perform_search(phrase)
+            results = self._perform_search(phrase, partial_results_callback)
             search_time = time.time() - start_time
             
             # Format response
@@ -84,7 +84,7 @@ class SearchService:
                 'results': []
             }
     
-    def _perform_search(self, phrase):
+    def _perform_search(self, phrase, partial_results_callback=None):
         """Perform the actual search."""
         # Get Torah text
         lines = self.torah_service.get_torah_lines()
@@ -99,7 +99,7 @@ class SearchService:
         
         # Perform parallel search
         grouped_matches = self._search_parallel(
-            automaton, lines, len(phrase.replace(' ', '')), phrase, full_text
+            automaton, lines, len(phrase.replace(' ', '')), phrase, full_text, partial_results_callback
         )
         
         # Format results
@@ -132,7 +132,7 @@ class SearchService:
         automaton.make_automaton()
         return automaton
     
-    def _search_parallel(self, automaton, lines, phrase_length, input_phrase, full_text):
+    def _search_parallel(self, automaton, lines, phrase_length, input_phrase, full_text, partial_results_callback=None):
         """Perform parallel search across Torah text with AWS optimization."""
         grouped_matches = defaultdict(list)
         
@@ -158,6 +158,9 @@ class SearchService:
                 try:
                     batch_results = future.result(timeout=30)
                     
+                    # Process batch results
+                    batch_partial_results = []
+                    
                     for variant, source, book, chapter, verse_num, marked_text in batch_results:
                         grouped_matches[(variant, source)].append({
                             'book': book,
@@ -165,6 +168,17 @@ class SearchService:
                             'verse': verse_num,
                             'text': marked_text
                         })
+                        
+                        # Add to partial results
+                        if variant not in [r['variant'] for r in batch_partial_results]:
+                            batch_partial_results.append({
+                                'variant': variant,
+                                'sources': list(source)
+                            })
+                    
+                    # Call the callback with partial results if provided
+                    if partial_results_callback and batch_partial_results:
+                        partial_results_callback(batch_partial_results)
                         
                 except Exception as e:
                     batch_idx = future_to_batch[future]

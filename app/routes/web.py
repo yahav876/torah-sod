@@ -75,7 +75,7 @@ def get_main_template():
             gap: 15px;
             justify-content: center;
             align-items: center;
-            margin-bottom: 30px;
+            margin-bottom: 15px;
             flex-wrap: wrap;
         }
         
@@ -111,6 +111,51 @@ def get_main_template():
             box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
         }
         
+        .search-options {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        .toggle-container {
+            display: flex;
+            background: #f1f1f1;
+            border-radius: 30px;
+            padding: 5px;
+            margin: 10px 0;
+            position: relative;
+            width: 300px;
+        }
+        
+        .toggle-option {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            z-index: 1;
+            transition: color 0.3s ease;
+            border-radius: 25px;
+        }
+        
+        .toggle-option.active {
+            color: white;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            width: calc(50% - 5px);
+            height: calc(100% - 10px);
+            background: #3498db;
+            border-radius: 25px;
+            transition: transform 0.3s ease;
+        }
+        
+        .toggle-slider.right {
+            transform: translateX(100%);
+        }
+        
         #loading {
             display: none;
             color: #3498db;
@@ -127,6 +172,28 @@ def get_main_template():
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-left: 10px;
+        }
+        
+        .progress-container {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+        
+        .progress-bar {
+            height: 10px;
+            background-color: #4CAF50;
+            border-radius: 10px;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .partial-results {
+            font-style: italic;
+            color: #7f8c8d;
+            margin-bottom: 10px;
         }
         
         @keyframes spin {
@@ -227,10 +294,24 @@ def get_main_template():
                 <button id="searchBtn" onclick="search()">חפש</button>
             </div>
             
+            <div class="search-options">
+                <div class="toggle-container">
+                    <div id="indexedOption" class="toggle-option active" onclick="setSearchType('indexed')">חיפוש מאגר נתונים</div>
+                    <div id="memoryOption" class="toggle-option" onclick="setSearchType('memory')">חיפוש בזיכרון</div>
+                    <div class="toggle-slider"></div>
+                </div>
+            </div>
+            
             <div id="loading">
                 מחפש...
                 <div class="spinner"></div>
             </div>
+            
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            
+            <div id="partialResults" class="partial-results"></div>
             
             <div id="results"></div>
         </div>
@@ -238,6 +319,26 @@ def get_main_template():
 
     <script>
         let isSearching = false;
+        let searchType = 'indexed'; // Default search type
+        let searchJobId = null;
+        let progressInterval = null;
+        let partialResults = [];
+        
+        // Set up search type toggle
+        function setSearchType(type) {
+            searchType = type;
+            
+            // Update UI
+            if (type === 'indexed') {
+                document.getElementById('indexedOption').classList.add('active');
+                document.getElementById('memoryOption').classList.remove('active');
+                document.querySelector('.toggle-slider').classList.remove('right');
+            } else {
+                document.getElementById('indexedOption').classList.remove('active');
+                document.getElementById('memoryOption').classList.add('active');
+                document.querySelector('.toggle-slider').classList.add('right');
+            }
+        }
         
         document.getElementById('searchInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
@@ -257,7 +358,13 @@ def get_main_template():
             isSearching = true;
             document.getElementById('loading').style.display = 'block';
             document.getElementById('results').innerHTML = '';
+            document.getElementById('partialResults').innerHTML = '';
             document.getElementById('searchBtn').disabled = true;
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('progressBar').style.width = '0%';
+            
+            // Reset partial results
+            partialResults = [];
             
             try {
                 const response = await fetch('/api/search', {
@@ -265,20 +372,132 @@ def get_main_template():
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ phrase: query })
+                    body: JSON.stringify({ 
+                        phrase: query,
+                        search_type: searchType
+                    })
                 });
                 
                 const data = await response.json();
-                displayResults(data);
+                
+                // Check if this is a background job
+                if (data.job_id) {
+                    searchJobId = data.job_id;
+                    startProgressPolling(searchJobId);
+                } else {
+                    // Regular search result
+                    displayResults(data);
+                    document.getElementById('progressContainer').style.display = 'none';
+                }
                 
             } catch (error) {
                 console.error('Error:', error);
                 document.getElementById('results').innerHTML = 
                     '<div class="error">שגיאה בחיפוש: ' + error.message + '</div>';
+                document.getElementById('progressContainer').style.display = 'none';
             } finally {
-                isSearching = false;
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('searchBtn').disabled = false;
+                if (!searchJobId) {
+                    isSearching = false;
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('searchBtn').disabled = false;
+                }
+            }
+        }
+        
+        // Poll for progress updates and partial results
+        async function startProgressPolling(jobId) {
+            let progress = 0;
+            let completed = false;
+            
+            // Update progress bar immediately
+            updateProgressBar(10);
+            
+            // Start polling for partial results
+            progressInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/search/status/${jobId}`);
+                    const data = await response.json();
+                    
+                    if (data.progress) {
+                        progress = data.progress;
+                    } else {
+                        // Increment progress slightly to show activity
+                        progress = Math.min(progress + 5, 90);
+                    }
+                    
+                    updateProgressBar(progress);
+                    
+                    // Check for partial results
+                    if (data.partial_results && data.partial_results.length > 0) {
+                        updatePartialResults(data.partial_results);
+                    }
+                    
+                    // Check if search is complete
+                    if (data.status === 'completed') {
+                        clearInterval(progressInterval);
+                        completed = true;
+                        
+                        // Display final results
+                        if (data.results) {
+                            displayResults(data.results);
+                        }
+                        
+                        // Clean up
+                        searchJobId = null;
+                        isSearching = false;
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('searchBtn').disabled = false;
+                        document.getElementById('progressContainer').style.display = 'none';
+                        document.getElementById('partialResults').innerHTML = '';
+                    }
+                    
+                    // Check for failure
+                    if (data.status === 'failed') {
+                        clearInterval(progressInterval);
+                        document.getElementById('results').innerHTML = 
+                            '<div class="error">שגיאה בחיפוש: ' + (data.error_message || 'שגיאה לא ידועה') + '</div>';
+                        
+                        // Clean up
+                        searchJobId = null;
+                        isSearching = false;
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('searchBtn').disabled = false;
+                        document.getElementById('progressContainer').style.display = 'none';
+                        document.getElementById('partialResults').innerHTML = '';
+                    }
+                    
+                } catch (error) {
+                    console.error('Error checking progress:', error);
+                }
+            }, 1000);
+        }
+        
+        function updateProgressBar(progress) {
+            document.getElementById('progressBar').style.width = `${progress}%`;
+        }
+        
+        function updatePartialResults(newResults) {
+            // Add new results that aren't already in the partial results
+            for (const result of newResults) {
+                if (!partialResults.some(r => r.variant === result.variant)) {
+                    partialResults.push(result);
+                }
+            }
+            
+            // Display partial results
+            if (partialResults.length > 0) {
+                document.getElementById('partialResults').innerHTML = 
+                    `<div>נמצאו ${partialResults.length} תוצאות חלקיות עד כה...</div>`;
+                
+                // Display up to 3 partial results
+                const displayResults = partialResults.slice(0, 3);
+                let html = '';
+                
+                for (const result of displayResults) {
+                    html += `<div>${result.variant}</div>`;
+                }
+                
+                document.getElementById('partialResults').innerHTML += html;
             }
         }
         

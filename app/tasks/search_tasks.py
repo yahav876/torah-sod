@@ -13,7 +13,7 @@ logger = structlog.get_logger()
 
 
 @celery.task(bind=True, name='app.tasks.search_tasks.perform_background_search')
-def perform_background_search(self, job_id, phrase):
+def perform_background_search(self, job_id, phrase, search_type='indexed'):
     """Perform search as a background task."""
     try:
         # Update job status
@@ -32,10 +32,40 @@ def perform_background_search(self, job_id, phrase):
             meta={'current': 10, 'total': 100, 'status': 'Initializing search...'}
         )
         
-        # Perform search
-        with SearchService() as service:
-            # Disable cache for background searches
-            result = service.search(phrase, use_cache=False)
+        # Set up partial results tracking
+        partial_results = []
+        
+        # Create a callback function to collect partial results
+        def collect_partial_results(result_batch):
+            nonlocal partial_results
+            if result_batch and len(result_batch) > 0:
+                partial_results.extend(result_batch)
+                # Store partial results in Redis
+                try:
+                    from app.shared.redis_client import get_redis_client
+                    redis = get_redis_client()
+                    if redis:
+                        import json
+                        partial_key = f"partial_results:{job_id}"
+                        redis.setex(
+                            partial_key,
+                            3600,  # 1 hour expiration
+                            json.dumps(partial_results)
+                        )
+                except Exception as e:
+                    logger.error("redis_partial_results_error", error=str(e))
+        
+        # Perform search based on type with partial results callback
+        if search_type == 'memory':
+            # Use in-memory search
+            with SearchService() as service:
+                # Disable cache for background searches
+                result = service.search(phrase, use_cache=False, partial_results_callback=collect_partial_results)
+        else:
+            # Use indexed search
+            from app.services.indexed_search_service import IndexedSearchService
+            search_service = IndexedSearchService()
+            result = search_service.search(phrase, use_cache=False, partial_results_callback=collect_partial_results)
         
         # Update progress
         current_task.update_state(

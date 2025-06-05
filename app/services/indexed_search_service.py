@@ -24,7 +24,7 @@ class IndexedSearchService:
         self.letter_mappings = LetterMappings()
     
     @track_search_metrics('indexed')
-    def search(self, phrase, use_cache=True):
+    def search(self, phrase, use_cache=True, partial_results_callback=None):
         """Perform lightning-fast indexed search."""
         try:
             start_time = time.time()
@@ -53,11 +53,11 @@ class IndexedSearchService:
             
             # Choose search strategy based on phrase complexity
             if len(words) == 1:
-                results = self._search_single_word(words[0], phrase)
+                results = self._search_single_word(words[0], phrase, partial_results_callback)
             elif len(words) <= 3:
-                results = self._search_phrase_indexed(words, phrase)
+                results = self._search_phrase_indexed(words, phrase, partial_results_callback)
             else:
-                results = self._search_long_phrase(words, phrase)
+                results = self._search_long_phrase(words, phrase, partial_results_callback)
             
             search_time = time.time() - start_time
             
@@ -88,7 +88,7 @@ class IndexedSearchService:
                 'results': []
             }
     
-    def _search_single_word(self, word, original_phrase):
+    def _search_single_word(self, word, original_phrase, partial_results_callback=None):
         """Optimized single word search using database index."""
         logger.info("single_word_search", word=word)
         
@@ -130,6 +130,11 @@ class IndexedSearchService:
                 'sources': ['normalized'],
                 'locations': locations[:100]  # Limit per variant
             })
+            
+        # Call partial results callback if provided
+        if partial_results_callback and results:
+            partial_results = [{'variant': r['variant'], 'sources': r['sources']} for r in results]
+            partial_results_callback(partial_results)
         
         return {
             'results': results,
@@ -137,12 +142,12 @@ class IndexedSearchService:
             'method': 'single_word_index'
         }
     
-    def _search_phrase_indexed(self, words, original_phrase):
+    def _search_phrase_indexed(self, words, original_phrase, partial_results_callback=None):
         """Indexed phrase search using word position tracking."""
         logger.info("phrase_search", words=words, word_count=len(words))
         
         if len(words) == 1:
-            return self._search_single_word(words[0], original_phrase)
+            return self._search_single_word(words[0], original_phrase, partial_results_callback)
         
         # Generate variants for each word
         word_variants = [self._generate_word_variants(word) for word in words]
@@ -205,6 +210,11 @@ class IndexedSearchService:
                 'sources': ['phrase_index'],
                 'locations': locations
             })
+            
+        # Call partial results callback if provided
+        if partial_results_callback and results:
+            partial_results = [{'variant': r['variant'], 'sources': r['sources']} for r in results]
+            partial_results_callback(partial_results)
         
         return {
             'results': results,
@@ -212,7 +222,7 @@ class IndexedSearchService:
             'method': 'phrase_index'
         }
     
-    def _search_long_phrase(self, words, original_phrase):
+    def _search_long_phrase(self, words, original_phrase, partial_results_callback=None):
         """Fallback for very long phrases using text search."""
         logger.info("long_phrase_search", words=words, word_count=len(words))
         
@@ -245,6 +255,11 @@ class IndexedSearchService:
                 'sources': ['text_search'],
                 'locations': locations
             })
+            
+            # Call partial results callback if provided
+            if partial_results_callback:
+                partial_results = [{'variant': original_phrase, 'sources': ['text_search']}]
+                partial_results_callback(partial_results)
         
         return {
             'results': results,
