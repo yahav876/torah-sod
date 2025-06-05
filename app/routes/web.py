@@ -11,7 +11,8 @@ bp = Blueprint('web', __name__)
 
 
 @bp.route('/')
-@cache.cached(timeout=300)
+# Temporarily disable caching to ensure latest changes are visible
+# @cache.cached(timeout=300)
 def index():
     """Serve the main search interface."""
     return render_template_string(get_main_template())
