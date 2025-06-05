@@ -351,6 +351,11 @@ def get_main_template():
                 <div class="toggle-help">
                     לחץ על אחת האפשרויות כדי לבחור שיטת חיפוש - האפשרות הכחולה היא הנבחרת
                 </div>
+                
+                <div class="admin-options">
+                    <div style="margin-bottom: 10px; font-weight: bold;">ניהול מערכת</div>
+                    <button id="clearCacheBtn" class="admin-btn" onclick="clearCache()">נקה את המטמון</button>
+                </div>
             </div>
             
             <div id="loading">
@@ -368,11 +373,6 @@ def get_main_template():
             <div id="partialResults" class="partial-results"></div>
             
             <div id="results"></div>
-            
-            <div class="admin-options">
-                <div style="margin-bottom: 10px; font-weight: bold;">ניהול מערכת</div>
-                <button id="clearCacheBtn" class="admin-btn" onclick="clearCache()">נקה את המטמון</button>
-            </div>
         </div>
     </div>
 

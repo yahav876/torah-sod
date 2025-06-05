@@ -248,9 +248,8 @@ def clear_cache():
                 redis.delete(*cache_keys)
         
         # Clear database cache
-        from app.models.database import db, SearchResult, SearchCache
+        from app.models.database import db, SearchResult
         SearchResult.query.delete()
-        SearchCache.query.delete()
         db.session.commit()
         
         logger.info("cache_cleared", source="admin_request")
