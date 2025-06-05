@@ -267,6 +267,90 @@ def clear_cache():
         }), 500
 
 
+@bp.route('/debug/check-word', methods=['GET'])
+def check_word_in_db():
+    """Check if a specific word exists in the database."""
+    word = request.args.get('word', 'בראשית')
+    
+    # Also try direct search
+    try:
+        from app.services.indexed_search_service import IndexedSearchService
+        search_service = IndexedSearchService()
+        search_result = search_service.search(word)
+        has_results = len(search_result.get('results', [])) > 0
+    except Exception as e:
+        has_results = False
+        logger.error("direct_search_error", error=str(e))
+    
+    try:
+        from app.models.database import db, TorahWord, TorahVerse
+        from sqlalchemy import text
+        
+        # Check if the word exists in its original form
+        original_count = TorahWord.query.filter_by(word_original=word).count()
+        
+        # Check if the word exists in normalized form
+        from app.services.indexed_search_service import normalize_word
+        normalized = normalize_word(word)
+        normalized_count = TorahWord.query.filter_by(word_normalized=normalized).count()
+        
+        # Get some sample verses containing this word
+        sample_verses = []
+        words = TorahWord.query.filter_by(word_normalized=normalized).limit(5).all()
+        
+        for word_obj in words:
+            verse = TorahVerse.query.get(word_obj.verse_id)
+            if verse:
+                sample_verses.append({
+                    'book': verse.book,
+                    'chapter': verse.chapter,
+                    'verse': verse.verse,
+                    'text': verse.text,
+                    'position': word_obj.word_position
+                })
+        
+        # Check if the word exists in any verse text
+        verse_contains_count = TorahVerse.query.filter(
+            TorahVerse.text.like(f'%{word}%')
+        ).count()
+        
+        # Check if the word exists in any normalized verse text
+        verse_normalized_count = TorahVerse.query.filter(
+            TorahVerse.text_normalized.like(f'%{normalized}%')
+        ).count()
+        
+        # Try direct text search
+        direct_text_matches = []
+        verses = TorahVerse.query.filter(TorahVerse.text.like(f'%{word}%')).limit(3).all()
+        for verse in verses:
+            direct_text_matches.append({
+                'book': verse.book,
+                'chapter': verse.chapter,
+                'verse': verse.verse,
+                'text': verse.text
+            })
+        
+        return jsonify({
+            'success': True,
+            'word': word,
+            'normalized': normalized,
+            'original_count': original_count,
+            'normalized_count': normalized_count,
+            'verse_contains_count': verse_contains_count,
+            'verse_normalized_count': verse_normalized_count,
+            'sample_verses': sample_verses,
+            'direct_text_matches': direct_text_matches,
+            'direct_search_has_results': has_results
+        })
+        
+    except Exception as e:
+        logger.error("check_word_error", word=word, error=str(e))
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @bp.route('/performance', methods=['GET'])
 @cache.cached(timeout=30)
 def performance_stats():

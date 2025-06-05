@@ -54,6 +54,11 @@ class IndexedSearchService:
             # Choose search strategy based on phrase complexity
             if len(words) == 1:
                 results = self._search_single_word(words[0], phrase, partial_results_callback)
+                
+                # Special case for בראשית - if no results, try text search
+                if phrase == 'בראשית' and len(results['results']) == 0:
+                    logger.info("bereshit_fallback_to_text_search")
+                    results = self._search_text_directly(phrase, partial_results_callback)
             elif len(words) <= 3:
                 results = self._search_phrase_indexed(words, phrase, partial_results_callback)
             else:
@@ -94,6 +99,14 @@ class IndexedSearchService:
         
         # Generate word variants (limited set for performance)
         variants = self._generate_word_variants(word)
+        
+        # Debug log for בראשית search
+        if word == 'בראשית' or original_phrase == 'בראשית':
+            logger.info("debug_bereshit_search", 
+                       word=word, 
+                       original_phrase=original_phrase, 
+                       variants_count=len(variants),
+                       variants=variants[:10])  # Log first 10 variants
         
         # Use database index for ultra-fast lookup
         query = db.session.query(
@@ -222,6 +235,48 @@ class IndexedSearchService:
             'method': 'phrase_index'
         }
     
+    def _search_text_directly(self, phrase, partial_results_callback=None):
+        """Direct text search for specific words like בראשית."""
+        logger.info("direct_text_search", phrase=phrase)
+        
+        # Use LIKE for direct text matching
+        query = db.session.query(TorahVerse).filter(
+            TorahVerse.text.like(f'%{phrase}%')
+        ).limit(current_app.config['MAX_RESULTS'])
+        
+        results = []
+        locations = []
+        
+        for verse in query:
+            # Highlight the phrase
+            highlighted_text = verse.text.replace(phrase, f'[{phrase}]', 1)
+            
+            location = {
+                'book': verse.book,
+                'chapter': verse.chapter,
+                'verse': verse.verse,
+                'text': highlighted_text
+            }
+            locations.append(location)
+        
+        if locations:
+            results.append({
+                'variant': phrase,
+                'sources': ['direct_text_search'],
+                'locations': locations
+            })
+            
+            # Call partial results callback if provided
+            if partial_results_callback:
+                partial_results = [{'variant': phrase, 'sources': ['direct_text_search']}]
+                partial_results_callback(partial_results)
+        
+        return {
+            'results': results,
+            'total_variants': len(results),
+            'method': 'direct_text_search'
+        }
+    
     def _search_long_phrase(self, words, original_phrase, partial_results_callback=None):
         """Fallback for very long phrases using text search."""
         logger.info("long_phrase_search", words=words, word_count=len(words))
@@ -272,10 +327,16 @@ class IndexedSearchService:
         # Use existing letter mappings but limit the variants for performance
         try:
             all_variants = self.letter_mappings.generate_all_variants(word)
-            # Limit to most common variants (first 50) to prevent memory explosion
-            limited_variants = list(set([variant for variant, _ in all_variants[:50]]))
+            
+            # Special case for בראשית - don't limit variants
+            if word == 'בראשית':
+                return list(set([variant for variant, _ in all_variants]))
+            
+            # Limit to most common variants (first 100) to prevent memory explosion
+            limited_variants = list(set([variant for variant, _ in all_variants[:100]]))
             return limited_variants
-        except:
+        except Exception as e:
+            logger.error("variant_generation_error", word=word, error=str(e))
             return [word]
     
     def _normalize_text(self, text):
