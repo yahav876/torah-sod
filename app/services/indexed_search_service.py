@@ -223,177 +223,26 @@ class IndexedSearchService:
         }
     
     def _search_text_directly(self, phrase, partial_results_callback=None):
-        """Direct text search with all variants - optimized for background processing."""
-        logger.info("full_variant_search", phrase=phrase)
+        """Ultra-optimized direct text search with variant support."""
+        logger.info("optimized_variant_search", phrase=phrase)
         
-        # Generate all variants of the phrase
-        all_variants = self.letter_mappings.generate_all_variants(phrase)
-        
-        # Log the number of variants
-        logger.info("variants_generated", phrase=phrase, variant_count=len(all_variants))
-        
-        results = []
-        grouped_matches = defaultdict(list)
-        
-        # For single words, use a more efficient approach with batched queries
+        # For single words, use a more efficient approach
         if ' ' not in phrase:
-            # Process variants in batches to avoid memory issues
-            batch_size = 20
-            for i in range(0, len(all_variants), batch_size):
-                batch = all_variants[i:i+batch_size]
-                
-                # Create OR conditions for this batch
-                or_conditions = []
-                for variant, _ in batch:
-                    or_conditions.append(TorahVerse.text.like(f'%{variant}%'))
-                
-                if not or_conditions:
-                    continue
-                
-                try:
-                    # Use a single query with OR conditions for all variants in this batch
-                    query = db.session.query(TorahVerse).filter(
-                        or_(*or_conditions)
-                    ).limit(50)  # Limit results per batch
-                    
-                    for verse in query:
-                        # Find which variant matched
-                        matched_variant = None
-                        for variant, sources in batch:
-                            if variant in verse.text:
-                                matched_variant = (variant, tuple(sources))
-                                break
-                        
-                        if not matched_variant:
-                            continue
-                        
-                        # Highlight the variant
-                        highlighted_text = verse.text.replace(matched_variant[0], f'[{matched_variant[0]}]', 1)
-                        
-                        location = {
-                            'book': verse.book,
-                            'chapter': verse.chapter,
-                            'verse': verse.verse,
-                            'text': highlighted_text
-                        }
-                        
-                        # Group by variant
-                        grouped_matches[matched_variant].append(location)
-                    
-                    # Call partial results callback periodically
-                    if partial_results_callback and grouped_matches:
-                        partial_results = []
-                        for (var, src), locs in grouped_matches.items():
-                            partial_results.append({
-                                'variant': var,
-                                'sources': list(src)
-                            })
-                        partial_results_callback(partial_results)
-                        
-                except Exception as e:
-                    logger.error("batch_search_error", error=str(e), batch_index=i)
-                    # Continue with next batch
-        else:
-            # For phrases, just search for the exact phrase
-            try:
-                query = db.session.query(TorahVerse).filter(
-                    TorahVerse.text.like(f'%{phrase}%')
-                ).limit(current_app.config['MAX_RESULTS'])
-                
-                locations = []
-                for verse in query:
-                    # Highlight the phrase
-                    highlighted_text = verse.text.replace(phrase, f'[{phrase}]', 1)
-                    
-                    location = {
-                        'book': verse.book,
-                        'chapter': verse.chapter,
-                        'verse': verse.verse,
-                        'text': highlighted_text
-                    }
-                    locations.append(location)
-                
-                if locations:
-                    grouped_matches[(phrase, ('Original',))] = locations
-                    
-                    # Call partial results callback if provided
-                    if partial_results_callback:
-                        partial_results = [{'variant': phrase, 'sources': ['Original']}]
-                        partial_results_callback(partial_results)
-            except Exception as e:
-                logger.error("phrase_search_error", error=str(e), exc_info=True)
-                # Continue with any results we have
+            return self._search_single_word_with_variants(phrase, partial_results_callback)
         
-        # Format results
-        for (variant, sources), locations in grouped_matches.items():
-            results.append({
-                'variant': variant,
-                'sources': list(sources),
-                'locations': locations[:100]  # Limit locations per variant
-            })
-        
-        # Call final partial results callback if provided
-        if partial_results_callback and results:
-            partial_results = [{'variant': r['variant'], 'sources': r['sources']} for r in results]
-            partial_results_callback(partial_results)
-        
-        return {
-            'results': results,
-            'total_variants': len(results),
-            'method': 'full_variant_search'
-        }
-    
-    def _search_single_word_optimized(self, word, partial_results_callback=None):
-        """Optimized search for single words to avoid timeout."""
-        logger.info("optimized_single_word_search", word=word)
-        
-        # Generate a limited set of important variants
-        variants = []
-        
-        # Add the original word
-        variants.append((word, ['Original']))
-        
-        # Add a few important variants based on common letter mappings
-        if word == 'בראשית':
-            # For בראשית, add some common variants
-            important_variants = [
-                'בראשית',  # Original
-                'אברשית',  # Map 1: ב-א swap
-                'בראשיח',  # Map 1: ת-ח swap
-                'תראשית',  # Map 2: ב-ת swap
-                'בראשיש'   # Map 2: ת-ש swap
-            ]
-            for v in important_variants:
-                if v != word:
-                    variants.append((v, ['Common']))
-        
+        # For phrases, use a simpler approach
         results = []
-        grouped_matches = defaultdict(list)
-        
-        # Create an OR condition for all variants
-        or_conditions = []
-        for variant, _ in variants:
-            or_conditions.append(TorahVerse.text.like(f'%{variant}%'))
+        locations = []
         
         try:
-            # Use a single query with OR conditions for all variants
+            # Use LIKE for direct text matching of the exact phrase
             query = db.session.query(TorahVerse).filter(
-                or_(*or_conditions)
+                TorahVerse.text.like(f'%{phrase}%')
             ).limit(current_app.config['MAX_RESULTS'])
             
             for verse in query:
-                # Find which variant matched
-                matched_variant = None
-                for variant, sources in variants:
-                    if variant in verse.text:
-                        matched_variant = (variant, tuple(sources))
-                        break
-                
-                if not matched_variant:
-                    matched_variant = (word, ('Original',))
-                
-                # Highlight the variant
-                highlighted_text = verse.text.replace(matched_variant[0], f'[{matched_variant[0]}]', 1)
+                # Highlight the phrase
+                highlighted_text = verse.text.replace(phrase, f'[{phrase}]', 1)
                 
                 location = {
                     'book': verse.book,
@@ -401,9 +250,95 @@ class IndexedSearchService:
                     'verse': verse.verse,
                     'text': highlighted_text
                 }
+                locations.append(location)
+            
+            if locations:
+                results.append({
+                    'variant': phrase,
+                    'sources': ['direct_text_search'],
+                    'locations': locations
+                })
                 
-                # Group by variant
-                grouped_matches[matched_variant].append(location)
+                # Call partial results callback if provided
+                if partial_results_callback:
+                    partial_results = [{'variant': phrase, 'sources': ['direct_text_search']}]
+                    partial_results_callback(partial_results)
+        except Exception as e:
+            logger.error("phrase_search_error", error=str(e), exc_info=True)
+            # Continue with any results we have
+        
+        return {
+            'results': results,
+            'total_variants': len(results),
+            'method': 'full_variant_search'
+        }
+    
+    def _search_single_word_with_variants(self, word, partial_results_callback=None):
+        """Optimized search for single words with all variants."""
+        logger.info("optimized_variant_search", word=word)
+        
+        # Generate all variants but use a more efficient approach
+        all_variants = self.letter_mappings.generate_all_variants(word)
+        variant_count = len(all_variants)
+        logger.info("variants_generated", word=word, variant_count=variant_count)
+        
+        # Create a SQL query that uses a temporary table for better performance
+        # This is much faster than using multiple OR conditions
+        results = []
+        grouped_matches = defaultdict(list)
+        
+        try:
+            # Create a temporary table with all variants
+            # This is much faster than using OR conditions
+            with db.engine.connect() as connection:
+                # Create a temporary table
+                connection.execute(text("CREATE TEMPORARY TABLE IF NOT EXISTS temp_variants (variant TEXT, source TEXT)"))
+                
+                # Clear any existing data
+                connection.execute(text("DELETE FROM temp_variants"))
+                
+                # Insert variants in batches
+                batch_size = 100
+                for i in range(0, len(all_variants), batch_size):
+                    batch = all_variants[i:i+batch_size]
+                    
+                    # Prepare batch insert
+                    insert_values = []
+                    for variant, sources in batch:
+                        insert_values.append({"variant": variant, "source": ",".join(sources)})
+                    
+                    if insert_values:
+                        connection.execute(
+                            text("INSERT INTO temp_variants (variant, source) VALUES (:variant, :source)"),
+                            insert_values
+                        )
+                
+                # Query verses that contain any variant
+                result = connection.execute(text("""
+                    SELECT v.book, v.chapter, v.verse, v.text, tv.variant, tv.source
+                    FROM torah_verses v
+                    JOIN temp_variants tv ON v.text LIKE '%' || tv.variant || '%'
+                    LIMIT :limit
+                """), {"limit": current_app.config['MAX_RESULTS']})
+                
+                # Process results
+                for row in result:
+                    # Highlight the variant
+                    highlighted_text = row.text.replace(row.variant, f'[{row.variant}]', 1)
+                    
+                    location = {
+                        'book': row.book,
+                        'chapter': row.chapter,
+                        'verse': row.verse,
+                        'text': highlighted_text
+                    }
+                    
+                    # Group by variant
+                    variant_key = (row.variant, tuple(row.source.split(',')))
+                    grouped_matches[variant_key].append(location)
+                
+                # Clean up
+                connection.execute(text("DROP TABLE IF EXISTS temp_variants"))
         
         except Exception as e:
             logger.error("optimized_search_error", error=str(e), exc_info=True)
