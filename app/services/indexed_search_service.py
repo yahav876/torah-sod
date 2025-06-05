@@ -55,7 +55,7 @@ class IndexedSearchService:
             if len(words) == 1:
                 results = self._search_single_word(words[0], phrase)
             elif len(words) <= 3:
-                results = self._search_phrase_optimized(words, phrase)
+                results = self._search_phrase_indexed(words, phrase)
             else:
                 results = self._search_long_phrase(words, phrase)
             
@@ -137,8 +137,8 @@ class IndexedSearchService:
             'method': 'single_word_index'
         }
     
-    def _search_phrase_optimized(self, words, original_phrase):
-        """Optimized phrase search using word position tracking."""
+    def _search_phrase_indexed(self, words, original_phrase):
+        """Indexed phrase search using word position tracking."""
         logger.info("phrase_search", words=words, word_count=len(words))
         
         if len(words) == 1:

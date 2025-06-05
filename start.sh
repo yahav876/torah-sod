@@ -1,5 +1,5 @@
 #!/bin/bash
-# Startup script for the optimized Torah Search application
+# Startup script for the Torah Search application
 
 echo "🚀 Starting Optimized Torah Search Application"
 echo "============================================"
@@ -9,10 +9,10 @@ if command -v docker-compose &> /dev/null; then
     echo "Docker Compose detected. Starting with Docker..."
     echo ""
     
-    # Use the optimized docker-compose file
-    if [ -f "docker-compose.optimized.yml" ]; then
+    # Use the docker-compose file
+    if [ -f "docker-compose.aws.yml" ]; then
         echo "Starting all services..."
-        docker-compose -f docker-compose.optimized.yml up -d
+        docker-compose -f docker-compose.aws.yml up -d
         
         echo ""
         echo "Waiting for services to be ready..."
@@ -20,7 +20,7 @@ if command -v docker-compose &> /dev/null; then
         
         echo ""
         echo "Services status:"
-        docker-compose -f docker-compose.optimized.yml ps
+        docker-compose -f docker-compose.aws.yml ps
         
         echo ""
         echo "✅ Application is running!"
@@ -31,10 +31,10 @@ if command -v docker-compose &> /dev/null; then
         echo "- Health Check: http://localhost/health"
         echo "- Statistics: http://localhost/api/stats"
         echo ""
-        echo "To view logs: docker-compose -f docker-compose.optimized.yml logs -f"
-        echo "To stop: docker-compose -f docker-compose.optimized.yml down"
+        echo "To view logs: docker-compose -f docker-compose.aws.yml logs -f"
+        echo "To stop: docker-compose -f docker-compose.aws.yml down"
     else
-        echo "❌ Error: docker-compose.optimized.yml not found!"
+        echo "❌ Error: docker-compose.aws.yml not found!"
         exit 1
     fi
 else
@@ -76,6 +76,6 @@ else
     export FLASK_ENV=development
     export DATABASE_URL=sqlite:///torah_search.db
     
-    # Run the optimized application
-    python app_optimized.py
+    # Run the application
+    python app.py
 fi

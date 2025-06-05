@@ -57,4 +57,4 @@ ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
 
 # Run gunicorn
-CMD ["gunicorn", "--config", "gunicorn.conf.py", "wsgi_optimized:app"]
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "wsgi:app"]
