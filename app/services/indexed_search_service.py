@@ -223,53 +223,71 @@ class IndexedSearchService:
         }
     
     def _search_text_directly(self, phrase, partial_results_callback=None):
-        """Direct text search for specific words like בראשית."""
-        logger.info("direct_text_search", phrase=phrase)
+        """Direct text search with variant generation, similar to in-memory search."""
+        logger.info("direct_text_search_with_variants", phrase=phrase)
+        
+        # Generate all variants of the phrase, similar to in-memory search
+        all_variants = self.letter_mappings.generate_all_variants(phrase)
+        
+        # Log the number of variants
+        logger.info("variants_generated", phrase=phrase, variant_count=len(all_variants))
         
         results = []
-        locations = []
+        grouped_matches = defaultdict(list)
         
         try:
-            # Use LIKE for direct text matching
-            query = db.session.query(TorahVerse).filter(
-                TorahVerse.text.like(f'%{phrase}%')
-            ).limit(current_app.config['MAX_RESULTS'])
-            
-            # Log the SQL query for debugging
-            logger.info("direct_text_search_query", 
-                       sql=str(query.statement.compile(compile_kwargs={"literal_binds": True})))
-            
-            for verse in query:
-                # Highlight the phrase
-                highlighted_text = verse.text.replace(phrase, f'[{phrase}]', 1)
+            # For each variant, search for it in the text
+            for variant, sources in all_variants:
+                # Skip if we already have too many results
+                if len(grouped_matches) >= current_app.config['MAX_RESULTS']:
+                    break
                 
-                location = {
-                    'book': verse.book,
-                    'chapter': verse.chapter,
-                    'verse': verse.verse,
-                    'text': highlighted_text
-                }
-                locations.append(location)
+                # Use LIKE for direct text matching
+                query = db.session.query(TorahVerse).filter(
+                    TorahVerse.text.like(f'%{variant}%')
+                ).limit(10)  # Limit per variant
+                
+                for verse in query:
+                    # Highlight the variant
+                    highlighted_text = verse.text.replace(variant, f'[{variant}]', 1)
+                    
+                    location = {
+                        'book': verse.book,
+                        'chapter': verse.chapter,
+                        'verse': verse.verse,
+                        'text': highlighted_text
+                    }
+                    
+                    # Group by variant
+                    key = (variant, tuple(sources))
+                    grouped_matches[key].append(location)
+                    
+                    # Call partial results callback periodically if provided
+                    if partial_results_callback and len(grouped_matches) % 10 == 0:
+                        partial_results = []
+                        for (var, src), locs in grouped_matches.items():
+                            partial_results.append({
+                                'variant': var,
+                                'sources': list(src)
+                            })
+                        partial_results_callback(partial_results)
                 
         except Exception as e:
             logger.error("direct_text_search_error", error=str(e), exc_info=True)
-            return {
-                'results': [],
-                'total_variants': 0,
-                'method': 'direct_text_search_failed'
-            }
+            # Continue with any results we have so far
         
-        if locations:
+        # Format results
+        for (variant, sources), locations in grouped_matches.items():
             results.append({
-                'variant': phrase,
-                'sources': ['direct_text_search'],
-                'locations': locations
+                'variant': variant,
+                'sources': list(sources),
+                'locations': locations[:100]  # Limit locations per variant
             })
             
-            # Call partial results callback if provided
-            if partial_results_callback:
-                partial_results = [{'variant': phrase, 'sources': ['direct_text_search']}]
-                partial_results_callback(partial_results)
+        # Call final partial results callback if provided
+        if partial_results_callback and results:
+            partial_results = [{'variant': r['variant'], 'sources': r['sources']} for r in results]
+            partial_results_callback(partial_results)
         
         return {
             'results': results,
