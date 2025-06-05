@@ -114,8 +114,12 @@ def get_main_template():
         
         .search-options {
             display: flex;
+            flex-direction: column;
+            align-items: center;
             justify-content: center;
             margin-bottom: 20px;
+            width: 100%;
+            text-align: center;
         }
         
         .toggle-container {
@@ -123,7 +127,7 @@ def get_main_template():
             background: #f1f1f1;
             border-radius: 30px;
             padding: 5px;
-            margin: 10px 0;
+            margin: 10px auto;
             width: 400px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
@@ -151,6 +155,10 @@ def get_main_template():
             font-size: 14px;
             margin-top: 5px;
             font-style: italic;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
         }
         
         #loading {
