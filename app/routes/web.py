@@ -365,6 +365,29 @@ def get_main_template():
             margin: 20px 0;
         }
         
+        .results-controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .control-btn {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 0 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
         @media (max-width: 768px) {
             .search-box {
                 flex-direction: column;
@@ -416,7 +439,12 @@ def get_main_template():
                 <div class="progress-bar" id="progressBar"></div>
             </div>
             
-            <div id="partialResults" class="partial-results"></div>
+            <div id="partialResults" class="partial-results" style="display: none;"></div>
+            
+            <div class="results-controls" id="resultsControls" style="display: none;">
+                <button id="expandAllBtn" class="control-btn">הרחב הכל</button>
+                <button id="collapseAllBtn" class="control-btn">כווץ הכל</button>
+            </div>
             
             <div id="results"></div>
         </div>
@@ -463,6 +491,15 @@ def get_main_template():
                 if (e.key === 'Enter') {
                     search();
                 }
+            });
+            
+            // Set up expand/collapse all buttons
+            document.getElementById('expandAllBtn').addEventListener('click', function() {
+                expandAllVariants();
+            });
+            
+            document.getElementById('collapseAllBtn').addEventListener('click', function() {
+                collapseAllVariants();
             });
         });
         
@@ -743,6 +780,9 @@ def get_main_template():
                     toggleVariant(resultId);
                 });
             });
+            
+            // Show the expand/collapse all buttons
+            document.getElementById('resultsControls').style.display = 'block';
         }
         
         // Function to toggle variant expansion/collapse
@@ -787,6 +827,26 @@ def get_main_template():
                 toggle.classList.add('collapsed');
                 toggle.textContent = '◀';
             }
+        }
+        
+        // Function to expand all variants
+        function expandAllVariants() {
+            document.querySelectorAll('.locations-container').forEach(container => {
+                if (container.classList.contains('collapsed')) {
+                    const resultId = container.id;
+                    toggleVariant(resultId);
+                }
+            });
+        }
+        
+        // Function to collapse all variants
+        function collapseAllVariants() {
+            document.querySelectorAll('.locations-container').forEach(container => {
+                if (!container.classList.contains('collapsed')) {
+                    const resultId = container.id;
+                    toggleVariant(resultId);
+                }
+            });
         }
         
         // Function to clear all search caches
