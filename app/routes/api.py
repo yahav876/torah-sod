@@ -1,7 +1,7 @@
 """
 API routes for Torah Search
 """
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, Response
 from flask_limiter.util import get_remote_address
 from app.services.search_service import SearchService
 from app.tasks.search_tasks import perform_background_search
@@ -11,6 +11,10 @@ from app.app_factory import limiter, cache
 import uuid
 import structlog
 from datetime import datetime
+import json
+import queue
+import threading
+import time
 
 logger = structlog.get_logger()
 
@@ -99,6 +103,114 @@ def search():
         
     except Exception as e:
         logger.error("indexed_search_error", error=str(e), exc_info=True)
+        return jsonify({'error': 'Internal server error', 'success': False}), 500
+
+
+@bp.route('/search/stream', methods=['GET'])
+@limiter.limit("20 per minute")
+@limiter.limit("100 per hour")
+def search_stream():
+    """Stream search results using Server-Sent Events."""
+    try:
+        phrase = request.args.get('phrase', '').strip()
+        if not phrase:
+            return jsonify({'error': 'Missing phrase parameter', 'success': False}), 400
+        if not phrase:
+            return jsonify({'error': 'Empty phrase provided', 'success': False}), 400
+        
+        if len(phrase) > current_app.config['MAX_PHRASE_LENGTH']:
+            return jsonify({
+                'error': f'Phrase too long (max {current_app.config["MAX_PHRASE_LENGTH"]} characters)',
+                'success': False
+            }), 400
+        
+        # Get search type
+        search_type = request.args.get('search_type', 'indexed')
+        
+        # Log search request
+        logger.info("search_stream_request", phrase=phrase, type=search_type, ip=get_remote_address())
+        
+        def generate():
+            """Generator function for SSE."""
+            # Create a queue for partial results
+            results_queue = queue.Queue()
+            all_results = []
+            search_complete = threading.Event()
+            final_result = {}
+            
+            def partial_results_callback(partial_results):
+                """Callback to handle partial results."""
+                if partial_results:
+                    results_queue.put(partial_results)
+            
+            def search_worker():
+                """Worker thread to perform the search."""
+                nonlocal final_result
+                try:
+                    # Choose search service based on type
+                    if search_type == 'memory':
+                        with SearchService() as search_service:
+                            final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                    else:
+                        from app.services.indexed_search_service import IndexedSearchService
+                        search_service = IndexedSearchService()
+                        final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                except Exception as e:
+                    logger.error("search_worker_error", error=str(e))
+                    final_result = {'error': str(e), 'success': False}
+                finally:
+                    search_complete.set()
+            
+            # Start search in background thread
+            search_thread = threading.Thread(target=search_worker)
+            search_thread.start()
+            
+            # Send initial event
+            yield f"data: {json.dumps({'type': 'start', 'phrase': phrase})}\n\n"
+            
+            # Stream partial results as they come in
+            while not search_complete.is_set() or not results_queue.empty():
+                try:
+                    # Wait for partial results with timeout
+                    partial_results = results_queue.get(timeout=0.1)
+                    
+                    # Send partial results
+                    for result in partial_results:
+                        if result['variant'] not in [r['variant'] for r in all_results]:
+                            all_results.append(result)
+                            yield f"data: {json.dumps({'type': 'partial', 'result': result})}\n\n"
+                    
+                except queue.Empty:
+                    # No results yet, continue waiting
+                    continue
+            
+            # Wait for search thread to complete
+            search_thread.join()
+            
+            # Send final results
+            yield f"data: {json.dumps({'type': 'complete', 'results': final_result})}\n\n"
+            
+            # Record statistics
+            try:
+                word_count = len(phrase.split())
+                stats = SearchStatistics(
+                    search_phrase=phrase,
+                    word_count=word_count,
+                    search_time=final_result.get('search_time', 0),
+                    results_count=final_result.get('total_variants', 0),
+                    cache_hit=False,
+                    client_ip=get_remote_address(),
+                    user_agent=request.headers.get('User-Agent', '')
+                )
+                db.session.add(stats)
+                db.session.commit()
+            except Exception as e:
+                logger.error("stats_recording_error", error=str(e))
+        
+        return Response(generate(), mimetype="text/event-stream")
+        
+    except Exception as e:
+        logger.error("search_stream_error", error=str(e), exc_info=True)
         return jsonify({'error': 'Internal server error', 'success': False}), 500
 
 

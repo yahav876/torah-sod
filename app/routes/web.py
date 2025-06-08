@@ -543,52 +543,134 @@ def get_main_template():
             // Reset partial results
             partialResults = [];
             
-            try {
-                // Create a new AbortController for this search
-                abortController = new AbortController();
-                const signal = abortController.signal;
-                
-                const response = await fetch('/api/search', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
+            // Check if we should use streaming for small searches
+            const wordCount = query.split(' ').length;
+            const useStreaming = wordCount <= 10; // Use streaming for searches with 10 or fewer words
+            
+            if (useStreaming) {
+                // Use Server-Sent Events for streaming results
+                try {
+                    const eventSource = new EventSource('/api/search/stream?' + new URLSearchParams({
                         phrase: query,
                         search_type: searchType
-                    }),
-                    signal: signal
-                });
-                
-                const data = await response.json();
-                
-                // Check if this is a background job
-                if (data.job_id) {
-                    searchJobId = data.job_id;
-                    startProgressPolling(searchJobId);
-                } else {
-                    // Regular search result
-                    displayResults(data);
-                    document.getElementById('progressContainer').style.display = 'none';
-                }
-                
-            } catch (error) {
-                if (error.name === 'AbortError') {
-                    document.getElementById('results').innerHTML = 
-                        '<div class="error">החיפוש בוטל על ידי המשתמש</div>';
-                    document.getElementById('progressContainer').style.display = 'none';
-                } else {
+                    }));
+                    
+                    // Store EventSource for cancellation
+                    window.currentEventSource = eventSource;
+                    
+                    let progressPercent = 10;
+                    
+                    eventSource.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.type === 'start') {
+                            console.log('Search started for:', data.phrase);
+                            updateProgressBar(10);
+                        } else if (data.type === 'partial') {
+                            // Add partial result
+                            if (!partialResults.some(r => r.variant === data.result.variant)) {
+                                partialResults.push(data.result);
+                                updatePartialResults(partialResults);
+                                
+                                // Update progress
+                                progressPercent = Math.min(progressPercent + 5, 80);
+                                updateProgressBar(progressPercent);
+                            }
+                        } else if (data.type === 'complete') {
+                            // Display final results
+                            eventSource.close();
+                            window.currentEventSource = null;
+                            
+                            updateProgressBar(100);
+                            displayResults(data.results);
+                            
+                            // Clean up
+                            isSearching = false;
+                            document.getElementById('loading').style.display = 'none';
+                            document.getElementById('cancelBtn').style.display = 'none';
+                            document.getElementById('searchBtn').disabled = false;
+                            document.getElementById('progressContainer').style.display = 'none';
+                            document.getElementById('partialResults').style.display = 'none';
+                        }
+                    };
+                    
+                    eventSource.onerror = function(error) {
+                        console.error('EventSource error:', error);
+                        eventSource.close();
+                        window.currentEventSource = null;
+                        
+                        document.getElementById('results').innerHTML = 
+                            '<div class="error">שגיאה בחיפוש</div>';
+                        
+                        // Clean up
+                        isSearching = false;
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('cancelBtn').style.display = 'none';
+                        document.getElementById('searchBtn').disabled = false;
+                        document.getElementById('progressContainer').style.display = 'none';
+                    };
+                    
+                } catch (error) {
                     console.error('Error:', error);
                     document.getElementById('results').innerHTML = 
                         '<div class="error">שגיאה בחיפוש: ' + error.message + '</div>';
                     document.getElementById('progressContainer').style.display = 'none';
-                }
-            } finally {
-                if (!searchJobId) {
+                    
+                    // Clean up
                     isSearching = false;
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('cancelBtn').style.display = 'none';
                     document.getElementById('searchBtn').disabled = false;
+                }
+            } else {
+                // Use regular search for complex queries (background job)
+                try {
+                    // Create a new AbortController for this search
+                    abortController = new AbortController();
+                    const signal = abortController.signal;
+                    
+                    const response = await fetch('/api/search', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ 
+                            phrase: query,
+                            search_type: searchType
+                        }),
+                        signal: signal
+                    });
+                    
+                    const data = await response.json();
+                    
+                    // Check if this is a background job
+                    if (data.job_id) {
+                        searchJobId = data.job_id;
+                        startProgressPolling(searchJobId);
+                    } else {
+                        // Regular search result
+                        displayResults(data);
+                        document.getElementById('progressContainer').style.display = 'none';
+                    }
+                    
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        document.getElementById('results').innerHTML = 
+                            '<div class="error">החיפוש בוטל על ידי המשתמש</div>';
+                        document.getElementById('progressContainer').style.display = 'none';
+                    } else {
+                        console.error('Error:', error);
+                        document.getElementById('results').innerHTML = 
+                            '<div class="error">שגיאה בחיפוש: ' + error.message + '</div>';
+                        document.getElementById('progressContainer').style.display = 'none';
+                    }
+                } finally {
+                    if (!searchJobId) {
+                        isSearching = false;
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('cancelBtn').style.display = 'none';
+                        document.getElementById('searchBtn').disabled = false;
+                    }
                 }
             }
         }
@@ -691,6 +773,12 @@ def get_main_template():
         function cancelSearch() {
             if (!isSearching) return;
             
+            // If using EventSource for streaming
+            if (window.currentEventSource) {
+                window.currentEventSource.close();
+                window.currentEventSource = null;
+            }
+            
             // If using AbortController for fetch
             if (abortController) {
                 abortController.abort();
@@ -705,17 +793,18 @@ def get_main_template():
                     progressInterval = null;
                 }
                 
-                // Update UI
                 searchJobId = null;
-                isSearching = false;
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('cancelBtn').style.display = 'none';
-                document.getElementById('searchBtn').disabled = false;
-                document.getElementById('progressContainer').style.display = 'none';
-                document.getElementById('partialResults').innerHTML = '';
-                document.getElementById('results').innerHTML = 
-                    '<div class="error">החיפוש בוטל על ידי המשתמש</div>';
             }
+            
+            // Update UI
+            isSearching = false;
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('cancelBtn').style.display = 'none';
+            document.getElementById('searchBtn').disabled = false;
+            document.getElementById('progressContainer').style.display = 'none';
+            document.getElementById('partialResults').innerHTML = '';
+            document.getElementById('results').innerHTML = 
+                '<div class="error">החיפוש בוטל על ידי המשתמש</div>';
         }
         
         function updatePartialResults(newResults) {
