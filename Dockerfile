@@ -36,8 +36,11 @@ COPY --from=builder /root/.local /home/torah_user/.local
 # Copy application code
 COPY --chown=torah_user:torah_user . .
 
-# Make scripts executable
-RUN chmod +x start.sh
+# Make scripts executable and create instance directory with proper permissions
+RUN chmod +x start.sh && \
+    mkdir -p /app/instance && \
+    chown -R torah_user:torah_user /app/instance && \
+    chmod 755 /app/instance
 
 # Switch to non-root user
 USER torah_user

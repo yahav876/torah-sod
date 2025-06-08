@@ -7,8 +7,9 @@ docker compose -f docker-compose.aws.yml down
 docker stop torah-sod-torah-search-1 || true
 docker rm torah-sod-torah-search-1 || true
 
-echo "Building and starting new containers..."
-docker compose -f docker-compose.aws.yml up -d --build
+echo "Building and starting new containers with no cache to apply all changes..."
+docker compose -f docker-compose.aws.yml build --no-cache
+docker compose -f docker-compose.aws.yml up -d
 
 echo "Update complete! Running containers:"
 docker ps
