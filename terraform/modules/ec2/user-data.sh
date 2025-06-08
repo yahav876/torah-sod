@@ -155,13 +155,7 @@ fi
 log_info "Trying HTTPS clone..."
 git clone ${github_repo} tzfanim || {
     log_info "HTTPS clone failed, trying SSH..."
-    git clone git@github.com:yahav876/tzfanim.git tzfanim || {
-        log_info "SSH clone failed, trying original repo name..."
-        git clone https://github.com/yahav876/torah-sod.git tzfanim || {
-            log_info "Original repo name failed, trying SSH with original name..."
-            git clone git@github.com:yahav876/torah-sod.git tzfanim || error_exit "Failed to clone repository using all methods"
-        }
-    }
+    git clone git@github.com:yahav876/torah-sod.git tzfanim || error_exit "Failed to clone repository using all methods"
 }
 
 cd /opt/tzfanim
