@@ -7,16 +7,14 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./docker/nginx-multi.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx-dynamic.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - tzfanim-search-1
-      - tzfanim-search-2
-      - tzfanim-search-3
+      - tzfanim-search
     networks:
       - torah-network
 
-  # Application Replicas
-  tzfanim-search-1:
+  # Application Service (scalable)
+  tzfanim-search:
     build:
       context: .
       dockerfile: Dockerfile
@@ -32,55 +30,12 @@ services:
       - REDIS_POOL_SIZE=40
       - REDIS_MAX_CONNECTIONS=80
       - USE_BOOK_PARALLEL_SEARCH=true
-      - INSTANCE_ID=1
     volumes:
       - ./torah.txt:/app/torah.txt:ro
     networks:
       - torah-network
-
-  tzfanim-search-2:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    environment:
-      - FLASK_ENV=${FLASK_ENV:-production}
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - MAX_WORKERS=8
-      - BATCH_SIZE_MULTIPLIER=300
-      - REDIS_POOL_SIZE=40
-      - REDIS_MAX_CONNECTIONS=80
-      - USE_BOOK_PARALLEL_SEARCH=true
-      - INSTANCE_ID=2
-    volumes:
-      - ./torah.txt:/app/torah.txt:ro
-    networks:
-      - torah-network
-
-  tzfanim-search-3:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    environment:
-      - FLASK_ENV=${FLASK_ENV:-production}
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - MAX_WORKERS=8
-      - BATCH_SIZE_MULTIPLIER=300
-      - REDIS_POOL_SIZE=40
-      - REDIS_MAX_CONNECTIONS=80
-      - USE_BOOK_PARALLEL_SEARCH=true
-      - INSTANCE_ID=3
-    volumes:
-      - ./torah.txt:/app/torah.txt:ro
-    networks:
-      - torah-network
+    deploy:
+      replicas: 3  # Default number of replicas
 
   # Redis (shared) - Remove if using ElastiCache
   redis:
