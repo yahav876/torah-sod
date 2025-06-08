@@ -37,7 +37,7 @@ provider "aws" {
 
 locals {
   environment = "dev"
-  github_repo = "https://github.com/yahav876/torah-sod.git"
+  github_repo = "https://github.com/yahav876/tzfanim.git"
   domain_name = "tzfanim.com"
 }
 
