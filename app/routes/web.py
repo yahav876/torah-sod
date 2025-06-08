@@ -386,13 +386,13 @@ def get_main_template():
         <div class="search-section">
             <div class="search-box">
                 <input type="text" id="searchInput" placeholder="הכנס מילה או ביטוי בעברית..." />
-                <button id="searchBtn" onclick="search()">חפש</button>
+                <button id="searchBtn">חפש</button>
             </div>
             
             <div class="search-options">
                 <div class="toggle-container">
-                    <div id="indexedOption" class="toggle-option active" onclick="setSearchType('indexed')">חיפוש מאגר נתונים</div>
-                    <div id="memoryOption" class="toggle-option" onclick="setSearchType('memory')">חיפוש בזיכרון</div>
+                    <div id="indexedOption" class="toggle-option active">חיפוש מאגר נתונים</div>
+                    <div id="memoryOption" class="toggle-option">חיפוש בזיכרון</div>
                 </div>
                 <div class="toggle-help">
                     לחץ על אחת האפשרויות כדי לבחור שיטת חיפוש - האפשרות הכחולה היא הנבחרת
@@ -400,7 +400,7 @@ def get_main_template():
                 
                 <div class="admin-options">
                     <div style="margin-bottom: 10px; font-weight: bold;">ניהול מערכת</div>
-                    <button id="clearCacheBtn" class="admin-btn" onclick="clearCache()">נקה את המטמון</button>
+                    <button id="clearCacheBtn" class="admin-btn">נקה את המטמון</button>
                 </div>
             </div>
             
@@ -408,7 +408,7 @@ def get_main_template():
                 מחפש...
                 <div class="spinner"></div>
                 <div>
-                    <button id="cancelBtn" onclick="cancelSearch()">ביטול חיפוש</button>
+                    <button id="cancelBtn">ביטול חיפוש</button>
                 </div>
             </div>
             
@@ -430,6 +430,42 @@ def get_main_template():
         let partialResults = [];
         let abortController = null;
         
+        // Initialize all event handlers when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM fully loaded, initializing event handlers');
+            
+            // Set up search button click handler
+            document.getElementById('searchBtn').addEventListener('click', function() {
+                search();
+            });
+            
+            // Set up search type toggle handlers
+            document.getElementById('indexedOption').addEventListener('click', function() {
+                setSearchType('indexed');
+            });
+            
+            document.getElementById('memoryOption').addEventListener('click', function() {
+                setSearchType('memory');
+            });
+            
+            // Set up clear cache button handler
+            document.getElementById('clearCacheBtn').addEventListener('click', function() {
+                clearCache();
+            });
+            
+            // Set up cancel button handler
+            document.getElementById('cancelBtn').addEventListener('click', function() {
+                cancelSearch();
+            });
+            
+            // Set up search input enter key handler
+            document.getElementById('searchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    search();
+                }
+            });
+        });
+        
         // Set up search type toggle
         function setSearchType(type) {
             searchType = type;
@@ -444,11 +480,6 @@ def get_main_template():
             }
         }
         
-        document.getElementById('searchInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                search();
-            }
-        });
         
         async function search() {
             if (isSearching) return;
@@ -674,7 +705,7 @@ def get_main_template():
                 html += '<div class="result-item">';
                 
                 // Collapsible variant header
-                html += '<div class="variant-header" onclick="toggleVariant(\'' + resultId + '\')">';
+                html += '<div class="variant-header" data-result-id="' + resultId + '">';
                 html += '<div class="variant">' + result.variant + '</div>';
                 html += '<div class="variant-toggle">▼</div>';
                 html += '</div>';
@@ -704,13 +735,44 @@ def get_main_template():
                     container.style.maxHeight = container.scrollHeight + 'px';
                 }
             });
+            
+            // Add click event listeners to all variant headers
+            document.querySelectorAll('.variant-header').forEach(header => {
+                header.addEventListener('click', function() {
+                    const resultId = this.getAttribute('data-result-id');
+                    toggleVariant(resultId);
+                });
+            });
         }
         
         // Function to toggle variant expansion/collapse
         function toggleVariant(resultId) {
             const container = document.getElementById(resultId);
-            const header = container.previousElementSibling.previousElementSibling;
+            if (!container) {
+                console.error('Container not found:', resultId);
+                return;
+            }
+            
+            // Find the header by traversing up from the container
+            const resultItem = container.parentElement;
+            if (!resultItem) {
+                console.error('Result item not found for:', resultId);
+                return;
+            }
+            
+            // Find the variant header (first child of result item)
+            const header = resultItem.querySelector('.variant-header');
+            if (!header) {
+                console.error('Header not found for:', resultId);
+                return;
+            }
+            
+            // Find the toggle element
             const toggle = header.querySelector('.variant-toggle');
+            if (!toggle) {
+                console.error('Toggle not found for:', resultId);
+                return;
+            }
             
             if (container.classList.contains('collapsed')) {
                 // Expand
