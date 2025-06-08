@@ -531,7 +531,11 @@ def get_main_template():
             document.getElementById('loading').style.display = 'block';
             document.getElementById('cancelBtn').style.display = 'inline-block';
             document.getElementById('results').innerHTML = '';
-            document.getElementById('partialResults').innerHTML = '';
+            document.getElementById('partialResults').innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    מחפש תוצאות... אנא המתן
+                </div>`;
+            document.getElementById('partialResults').style.display = 'block';
             document.getElementById('searchBtn').disabled = true;
             document.getElementById('progressContainer').style.display = 'block';
             document.getElementById('progressBar').style.width = '0%';
@@ -695,6 +699,8 @@ def get_main_template():
         }
         
         function updatePartialResults(newResults) {
+            console.log("Received partial results:", newResults.length);
+            
             // Add new results that aren't already in the partial results
             for (const result of newResults) {
                 if (!partialResults.some(r => r.variant === result.variant)) {
@@ -702,20 +708,45 @@ def get_main_template():
                 }
             }
             
+            // Always show the partial results container, even if empty
+            document.getElementById('partialResults').style.display = 'block';
+            
             // Display partial results
             if (partialResults.length > 0) {
-                let html = `<div>נמצאו ${partialResults.length} תוצאות חלקיות עד כה...</div>`;
+                let html = `<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">
+                    נמצאו ${partialResults.length} תוצאות חלקיות עד כה... (החיפוש עדיין מתבצע)
+                </div>`;
                 
                 // Display all partial results with real-time updates
                 partialResults.forEach((result, index) => {
                     html += `<div class="partial-result-item">`;
                     html += `<div class="variant">${result.variant}</div>`;
                     html += `<div class="sources">מקורות: ${result.sources.join(', ')}</div>`;
+                    
+                    // Add a sample location if available
+                    if (result.locations && result.locations.length > 0) {
+                        const location = result.locations[0];
+                        html += `<div class="location">`;
+                        html += `<div class="location-header">${location.book} פרק ${location.chapter}, פסוק ${location.verse}</div>`;
+                        html += `<div class="verse-text">${location.text.replace(/\[([^\]]+)\]/g, '<span class="highlight">$1</span>')}</div>`;
+                        html += `</div>`;
+                        
+                        if (result.locations.length > 1) {
+                            html += `<div style="text-align: center; font-style: italic; margin-top: 5px;">
+                                ועוד ${result.locations.length - 1} מקומות נוספים...
+                            </div>`;
+                        }
+                    }
+                    
                     html += `</div>`;
                 });
                 
                 document.getElementById('partialResults').innerHTML = html;
-                document.getElementById('partialResults').style.display = 'block';
+            } else {
+                document.getElementById('partialResults').innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        מחפש תוצאות... אנא המתן
+                    </div>`;
             }
         }
         
