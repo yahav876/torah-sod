@@ -139,6 +139,12 @@ class SearchService:
         # Check if we should use book-based parallelization
         use_book_parallel = current_app.config.get('USE_BOOK_PARALLEL_SEARCH', False)
         
+        # Log the parallelization method being used
+        logger.info("search_parallelization_method", 
+                   use_book_parallel=use_book_parallel, 
+                   max_workers=current_app.config.get('MAX_WORKERS', 4),
+                   input_phrase=input_phrase)
+        
         if use_book_parallel:
             # Use book-based parallelization
             return self._search_parallel_by_books(automaton, lines, phrase_length, input_phrase, full_text, partial_results_callback)
@@ -203,8 +209,12 @@ class SearchService:
         # Log the books found
         logger.info("parallel_search_by_books", books=list(book_lines.keys()))
         
+        # Use maximum number of workers for better performance
+        # Each book can use multiple workers if available
+        num_workers = current_app.config['MAX_WORKERS']
+        logger.info("using_workers_for_book_search", num_workers=num_workers)
+        
         # Use context manager for thread pool
-        num_workers = min(len(book_lines), current_app.config['MAX_WORKERS'])
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
             # Submit search for each book
             future_to_book = {
@@ -257,20 +267,32 @@ class SearchService:
         current_book = None
         current_lines = []
         
+        # Define the Torah books we're looking for
+        torah_books = ['בראשית', 'שמות', 'ויקרא', 'במדבר', 'דברים']
+        
         for line in lines:
             line = line.strip()
             
-            # Check for book/chapter headers
+            # Check for book/chapter headers - more flexible pattern matching
             match = re.match(r'^(\S+)\s+\u05e4\u05e8\u05e7-([\u05d0-\u05ea]+)$', line)
+            book_name = None
+            
+            # Also check for just the book name at the beginning of a line
             if match:
-                book, _ = match.groups()
-                
+                book_name = match.group(1)
+            else:
+                for book in torah_books:
+                    if line.startswith(book):
+                        book_name = book
+                        break
+            
+            if book_name:
                 # If we found a new book, save the previous book's lines
-                if current_book and current_book != book and current_lines:
+                if current_book and current_book != book_name and current_lines:
                     book_lines[current_book] = current_lines
                     current_lines = []
                 
-                current_book = book
+                current_book = book_name
             
             # Add the line to the current book
             if current_book:
@@ -279,6 +301,23 @@ class SearchService:
         # Add the last book
         if current_book and current_lines:
             book_lines[current_book] = current_lines
+        
+        # Log the books found and their line counts
+        book_counts = {book: len(lines) for book, lines in book_lines.items()}
+        logger.info("grouped_lines_by_book", books=book_counts)
+        
+        # If no books were found, try a simpler approach - divide the text into 5 equal parts
+        if len(book_lines) == 0:
+            logger.info("no_books_found_using_equal_division")
+            total_lines = len(lines)
+            chunk_size = total_lines // 5
+            book_lines = {
+                'בראשית': lines[0:chunk_size],
+                'שמות': lines[chunk_size:chunk_size*2],
+                'ויקרא': lines[chunk_size*2:chunk_size*3],
+                'במדבר': lines[chunk_size*3:chunk_size*4],
+                'דברים': lines[chunk_size*4:]
+            }
         
         return book_lines
     

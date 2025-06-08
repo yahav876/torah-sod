@@ -12,7 +12,7 @@ services:
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - MAX_WORKERS=4  # Optimal for 8 vCPU: 1.5x CPU cores for I/O bound tasks
+      - MAX_WORKERS=8  # Increased for better parallel search performance
       - BATCH_SIZE_MULTIPLIER=150  # Balanced batch size
       - REDIS_POOL_SIZE=20
       - REDIS_MAX_CONNECTIONS=40
@@ -39,7 +39,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=8
     environment:
       - FLASK_ENV=${FLASK_ENV}
       - DATABASE_URL=${DATABASE_URL}
