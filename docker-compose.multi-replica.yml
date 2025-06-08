@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx-multi.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - tzfanim-search-1
+      - tzfanim-search-2
+      - tzfanim-search-3
+    networks:
+      - torah-network
+
+  # Application Replicas
+  tzfanim-search-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - MAX_WORKERS=8
+      - BATCH_SIZE_MULTIPLIER=300
+      - REDIS_POOL_SIZE=40
+      - REDIS_MAX_CONNECTIONS=80
+      - USE_BOOK_PARALLEL_SEARCH=true
+      - INSTANCE_ID=1
+    volumes:
+      - ./torah.txt:/app/torah.txt:ro
+    networks:
+      - torah-network
+
+  tzfanim-search-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - MAX_WORKERS=8
+      - BATCH_SIZE_MULTIPLIER=300
+      - REDIS_POOL_SIZE=40
+      - REDIS_MAX_CONNECTIONS=80
+      - USE_BOOK_PARALLEL_SEARCH=true
+      - INSTANCE_ID=2
+    volumes:
+      - ./torah.txt:/app/torah.txt:ro
+    networks:
+      - torah-network
+
+  tzfanim-search-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - MAX_WORKERS=8
+      - BATCH_SIZE_MULTIPLIER=300
+      - REDIS_POOL_SIZE=40
+      - REDIS_MAX_CONNECTIONS=80
+      - USE_BOOK_PARALLEL_SEARCH=true
+      - INSTANCE_ID=3
+    volumes:
+      - ./torah.txt:/app/torah.txt:ro
+    networks:
+      - torah-network
+
+  # Redis (shared)
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - torah-network
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=16
+    environment:
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./torah.txt:/app/torah.txt:ro
+    depends_on:
+      - redis
+    networks:
+      - torah-network
+
+volumes:
+  redis-data:
+
+networks:
+  torah-network:
+    driver: bridge

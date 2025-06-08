@@ -558,17 +558,34 @@ class IndexedSearchService:
     
     def _generate_word_variants(self, word):
         """Generate variants for Hebrew words."""
-        # Use existing letter mappings with increased limit
+        # Use existing letter mappings with smart limiting
         try:
-            all_variants = self.letter_mappings.generate_all_variants(word)
+            # Set max variants based on word length
+            if len(word) <= 3:
+                max_variants = 1000  # Small words can have more variants
+            elif len(word) <= 5:
+                max_variants = 500   # Medium words
+            elif len(word) <= 7:
+                max_variants = 200   # Longer words need fewer variants
+            else:
+                max_variants = 100   # Very long words get limited variants
             
-            # Don't limit variants for important words or short words
-            if len(word) <= 3 or word in ['בראשית', 'אלהים', 'יהוה', 'משה', 'אברהם', 'יצחק', 'יעקב', 'ישראל']:
-                return list(set([variant for variant, _ in all_variants]))
+            # Important words get more variants
+            if word in ['בראשית', 'אלהים', 'יהוה', 'משה', 'אברהם', 'יצחק', 'יעקב', 'ישראל']:
+                max_variants = 1000
             
-            # Increased limit to 200 variants for better coverage
-            limited_variants = list(set([variant for variant, _ in all_variants[:200]]))
-            return limited_variants
+            all_variants = self.letter_mappings.generate_all_variants(word, max_variants=max_variants)
+            
+            # Extract just the variant text
+            variant_texts = list(set([variant for variant, _ in all_variants]))
+            
+            logger.info("word_variants_generated", 
+                       word=word, 
+                       word_length=len(word),
+                       variants_count=len(variant_texts),
+                       max_variants=max_variants)
+            
+            return variant_texts
         except Exception as e:
             logger.error("variant_generation_error", word=word, error=str(e))
             return [word]

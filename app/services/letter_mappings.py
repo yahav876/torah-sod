@@ -107,8 +107,13 @@ class LetterMappings:
         
         return list(set(results))
     
-    def generate_all_variants(self, phrase: str) -> List[Tuple[str, List[str]]]:
-        """Generate all possible variants of a phrase using letter mappings."""
+    def generate_all_variants(self, phrase: str, max_variants: int = 10000) -> List[Tuple[str, List[str]]]:
+        """Generate all possible variants of a phrase using letter mappings.
+        
+        Args:
+            phrase: The phrase to generate variants for
+            max_variants: Maximum number of variants to generate (default 10000)
+        """
         letter_options = []
         
         for ch in phrase:
@@ -117,11 +122,102 @@ class LetterMappings:
             else:
                 letter_options.append(self.get_possible_conversions(ch))
         
-        # Generate all combinations
+        # Calculate total possible combinations
+        total_possible = 1
+        for options in letter_options:
+            total_possible *= len(options)
+        
+        # If total combinations exceed max_variants, use a smarter approach
+        if total_possible > max_variants:
+            return self._generate_limited_variants(phrase, letter_options, max_variants)
+        
+        # Generate all combinations (only for small phrases)
         variants = []
         for combo in itertools.product(*letter_options):
             variant_text = "".join([ltr for ltr, _ in combo])
             sources = [src for _, src in combo]
             variants.append((variant_text, sources))
+        
+        return variants
+    
+    def _generate_limited_variants(self, phrase: str, letter_options: List[List[Tuple[str, str]]], 
+                                  max_variants: int) -> List[Tuple[str, List[str]]]:
+        """Generate a limited set of high-quality variants for long phrases."""
+        import random
+        variants = []
+        seen_variants = set()
+        
+        # Always include the original
+        original_variant = "".join([opt[0][0] for opt in letter_options])
+        original_sources = ["Original"] * len(phrase.replace(' ', ''))
+        variants.append((original_variant, original_sources))
+        seen_variants.add(original_variant)
+        
+        # Strategy 1: Include single-character changes (most likely to find matches)
+        for i, ch_options in enumerate(letter_options):
+            if ch_options[0][0] == ' ':
+                continue
+            
+            for alt_char, source in ch_options[1:]:  # Skip original
+                if len(variants) >= max_variants:
+                    break
+                    
+                # Create variant with single character changed
+                variant_chars = [opt[0][0] for opt in letter_options]
+                variant_sources = ["Original"] * len(letter_options)
+                variant_chars[i] = alt_char
+                variant_sources[i] = source
+                
+                variant_text = "".join(variant_chars)
+                if variant_text not in seen_variants:
+                    variants.append((variant_text, variant_sources))
+                    seen_variants.add(variant_text)
+        
+        # Strategy 2: Include variants from each map type
+        for map_name in ["Map 1", "Map 2", "Map 3", "Map 4", "Map 5", "Map 6", "Map 7", "Map 8"]:
+            if len(variants) >= max_variants:
+                break
+                
+            variant_chars = []
+            variant_sources = []
+            
+            for ch_options in letter_options:
+                # Find a conversion from the current map
+                found = False
+                for char, source in ch_options:
+                    if source == map_name:
+                        variant_chars.append(char)
+                        variant_sources.append(source)
+                        found = True
+                        break
+                
+                if not found:
+                    # Use original if no mapping exists
+                    variant_chars.append(ch_options[0][0])
+                    variant_sources.append("Original")
+            
+            variant_text = "".join(variant_chars)
+            if variant_text not in seen_variants:
+                variants.append((variant_text, variant_sources))
+                seen_variants.add(variant_text)
+        
+        # Strategy 3: Random sampling for remaining slots
+        attempts = 0
+        while len(variants) < max_variants and attempts < max_variants * 2:
+            attempts += 1
+            
+            # Generate a random variant
+            variant_chars = []
+            variant_sources = []
+            
+            for ch_options in letter_options:
+                char, source = random.choice(ch_options)
+                variant_chars.append(char)
+                variant_sources.append(source)
+            
+            variant_text = "".join(variant_chars)
+            if variant_text not in seen_variants:
+                variants.append((variant_text, variant_sources))
+                seen_variants.add(variant_text)
         
         return variants
