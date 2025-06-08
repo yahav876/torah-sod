@@ -1,7 +1,7 @@
 """
 API routes for Torah Search
 """
-from flask import Blueprint, request, jsonify, current_app, Response
+from flask import Blueprint, request, jsonify, current_app, Response, after_this_request
 from flask_limiter.util import get_remote_address
 from app.services.search_service import SearchService
 from app.tasks.search_tasks import perform_background_search
@@ -112,6 +112,12 @@ def search():
 def search_stream():
     """Stream search results using Server-Sent Events."""
     try:
+        # Add CORS headers for SSE
+        @after_this_request
+        def add_headers(response):
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET'
+            return response
         phrase = request.args.get('phrase', '').strip()
         if not phrase:
             return jsonify({'error': 'Missing phrase parameter', 'success': False}), 400
@@ -170,24 +176,38 @@ def search_stream():
             search_thread = threading.Thread(target=search_worker)
             search_thread.start()
             
-            # Send initial event
-            yield f"data: {json.dumps({'type': 'start', 'phrase': phrase})}\n\n"
-            
-            # Stream partial results as they come in
-            while not search_complete.is_set() or not results_queue.empty():
-                try:
-                    # Wait for partial results with timeout
-                    partial_results = results_queue.get(timeout=0.1)
-                    
-                    # Send partial results
-                    for result in partial_results:
-                        if result['variant'] not in [r['variant'] for r in all_results]:
-                            all_results.append(result)
-                            yield f"data: {json.dumps({'type': 'partial', 'result': result})}\n\n"
-                    
-                except queue.Empty:
-                    # No results yet, continue waiting
-                    continue
+            try:
+                # Send initial event
+                yield f"data: {json.dumps({'type': 'start', 'phrase': phrase})}\n\n"
+                
+                # Stream partial results as they come in
+                timeout_counter = 0
+                max_timeout = 300  # 5 minutes max
+                
+                while not search_complete.is_set() or not results_queue.empty():
+                    try:
+                        # Wait for partial results with timeout
+                        partial_results = results_queue.get(timeout=0.1)
+                        
+                        # Send partial results
+                        for result in partial_results:
+                            if result['variant'] not in [r['variant'] for r in all_results]:
+                                all_results.append(result)
+                                yield f"data: {json.dumps({'type': 'partial', 'result': result})}\n\n"
+                        
+                    except queue.Empty:
+                        # No results yet, send keep-alive
+                        timeout_counter += 0.1
+                        if timeout_counter > max_timeout:
+                            yield f"data: {json.dumps({'type': 'error', 'message': 'Search timeout'})}\n\n"
+                            break
+                        # Send keep-alive every 30 seconds to prevent timeout
+                        if int(timeout_counter * 10) % 300 == 0:
+                            yield f": keepalive\n\n"
+                        continue
+            except Exception as e:
+                logger.error("sse_generation_error", error=str(e), exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
             
             # Wait for search thread to complete
             search_thread.join()
@@ -212,10 +232,142 @@ def search_stream():
             except Exception as e:
                 logger.error("stats_recording_error", error=str(e))
         
-        return Response(generate(), mimetype="text/event-stream")
+        return Response(
+            generate(), 
+            mimetype="text/event-stream",
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',  # Disable Nginx buffering
+                'Connection': 'keep-alive'
+            }
+        )
         
     except Exception as e:
         logger.error("search_stream_error", error=str(e), exc_info=True)
+        return jsonify({'error': 'Internal server error', 'success': False}), 500
+
+
+@bp.route('/search/live', methods=['POST'])
+@limiter.limit("20 per minute")
+@limiter.limit("100 per hour")
+def search_live():
+    """Alternative live search using session-based polling (works better with ALB)."""
+    try:
+        data = request.get_json()
+        if not data or 'phrase' not in data:
+            return jsonify({'error': 'Missing phrase parameter', 'success': False}), 400
+        
+        phrase = data['phrase'].strip()
+        if not phrase:
+            return jsonify({'error': 'Empty phrase provided', 'success': False}), 400
+        
+        if len(phrase) > current_app.config['MAX_PHRASE_LENGTH']:
+            return jsonify({
+                'error': f'Phrase too long (max {current_app.config["MAX_PHRASE_LENGTH"]} characters)',
+                'success': False
+            }), 400
+        
+        # Get search type
+        search_type = data.get('search_type', 'indexed')
+        
+        # Create a unique search session
+        search_session_id = str(uuid.uuid4())
+        
+        # Store partial results in Redis
+        from app.shared.redis_client import get_redis_client
+        redis = get_redis_client()
+        
+        # Set initial state
+        session_key = f"search_session:{search_session_id}"
+        redis.setex(session_key, 300, json.dumps({
+            'status': 'starting',
+            'phrase': phrase,
+            'partial_results': [],
+            'final_result': None
+        }))
+        
+        # Start search in background thread
+        def search_worker():
+            try:
+                all_results = []
+                
+                def partial_results_callback(partial_results):
+                    """Store partial results in Redis."""
+                    if partial_results:
+                        # Get current state
+                        current_state = json.loads(redis.get(session_key) or '{}')
+                        
+                        # Add new results
+                        for result in partial_results:
+                            if result['variant'] not in [r['variant'] for r in all_results]:
+                                all_results.append(result)
+                        
+                        # Update Redis
+                        current_state['partial_results'] = all_results
+                        current_state['status'] = 'running'
+                        redis.setex(session_key, 300, json.dumps(current_state))
+                
+                # Perform search
+                if search_type == 'memory':
+                    with SearchService() as search_service:
+                        final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                else:
+                    from app.services.indexed_search_service import IndexedSearchService
+                    search_service = IndexedSearchService()
+                    final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                
+                # Store final result
+                final_state = {
+                    'status': 'completed',
+                    'phrase': phrase,
+                    'partial_results': all_results,
+                    'final_result': final_result
+                }
+                redis.setex(session_key, 300, json.dumps(final_state))
+                
+            except Exception as e:
+                logger.error("live_search_error", error=str(e), exc_info=True)
+                error_state = {
+                    'status': 'error',
+                    'error': str(e),
+                    'phrase': phrase,
+                    'partial_results': [],
+                    'final_result': None
+                }
+                redis.setex(session_key, 300, json.dumps(error_state))
+        
+        # Start the search
+        search_thread = threading.Thread(target=search_worker)
+        search_thread.daemon = True
+        search_thread.start()
+        
+        return jsonify({
+            'success': True,
+            'session_id': search_session_id
+        })
+        
+    except Exception as e:
+        logger.error("search_live_error", error=str(e), exc_info=True)
+        return jsonify({'error': 'Internal server error', 'success': False}), 500
+
+
+@bp.route('/search/live/poll/<session_id>', methods=['GET'])
+def search_live_poll(session_id):
+    """Poll for live search results."""
+    try:
+        from app.shared.redis_client import get_redis_client
+        redis = get_redis_client()
+        
+        session_key = f"search_session:{session_id}"
+        state = redis.get(session_key)
+        
+        if not state:
+            return jsonify({'error': 'Session not found', 'success': False}), 404
+        
+        return jsonify(json.loads(state))
+        
+    except Exception as e:
+        logger.error("poll_error", session_id=session_id, error=str(e))
         return jsonify({'error': 'Internal server error', 'success': False}), 500
 
 

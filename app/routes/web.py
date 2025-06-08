@@ -599,15 +599,9 @@ def get_main_template():
                         eventSource.close();
                         window.currentEventSource = null;
                         
-                        document.getElementById('results').innerHTML = 
-                            '<div class="error">שגיאה בחיפוש</div>';
-                        
-                        // Clean up
-                        isSearching = false;
-                        document.getElementById('loading').style.display = 'none';
-                        document.getElementById('cancelBtn').style.display = 'none';
-                        document.getElementById('searchBtn').disabled = false;
-                        document.getElementById('progressContainer').style.display = 'none';
+                        // Fallback to polling-based approach
+                        console.log('Falling back to polling-based live search');
+                        useLivePolling(query, searchType);
                     };
                     
                 } catch (error) {
@@ -769,6 +763,94 @@ def get_main_template():
             document.getElementById('progressBar').style.width = `${progress}%`;
         }
         
+        // Polling-based live search (fallback for when SSE doesn't work with ALB)
+        async function useLivePolling(query, searchType) {
+            try {
+                // Start the search
+                const startResponse = await fetch('/api/search/live', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        phrase: query,
+                        search_type: searchType
+                    })
+                });
+                
+                const startData = await startResponse.json();
+                if (!startData.success) {
+                    throw new Error(startData.error || 'Failed to start search');
+                }
+                
+                const sessionId = startData.session_id;
+                let pollCount = 0;
+                const maxPolls = 300; // 5 minutes max
+                
+                // Store the polling interval for cancellation
+                window.currentPollInterval = setInterval(async () => {
+                    try {
+                        const pollResponse = await fetch(`/api/search/live/poll/${sessionId}`);
+                        const pollData = await pollResponse.json();
+                        
+                        if (pollData.status === 'error') {
+                            clearInterval(window.currentPollInterval);
+                            document.getElementById('results').innerHTML = 
+                                '<div class="error">שגיאה בחיפוש: ' + (pollData.error || 'Unknown error') + '</div>';
+                            cleanupSearch();
+                            return;
+                        }
+                        
+                        // Update partial results
+                        if (pollData.partial_results && pollData.partial_results.length > 0) {
+                            updatePartialResults(pollData.partial_results);
+                            updateProgressBar(Math.min(10 + (pollData.partial_results.length * 5), 80));
+                        }
+                        
+                        // Check if completed
+                        if (pollData.status === 'completed' && pollData.final_result) {
+                            clearInterval(window.currentPollInterval);
+                            updateProgressBar(100);
+                            displayResults(pollData.final_result);
+                            cleanupSearch();
+                            return;
+                        }
+                        
+                        // Timeout check
+                        pollCount++;
+                        if (pollCount > maxPolls) {
+                            clearInterval(window.currentPollInterval);
+                            document.getElementById('results').innerHTML = 
+                                '<div class="error">החיפוש נכשל - חריגת זמן</div>';
+                            cleanupSearch();
+                        }
+                        
+                    } catch (error) {
+                        console.error('Polling error:', error);
+                        clearInterval(window.currentPollInterval);
+                        document.getElementById('results').innerHTML = 
+                            '<div class="error">שגיאה בחיפוש</div>';
+                        cleanupSearch();
+                    }
+                }, 1000); // Poll every second
+                
+            } catch (error) {
+                console.error('Live polling error:', error);
+                document.getElementById('results').innerHTML = 
+                    '<div class="error">שגיאה בחיפוש: ' + error.message + '</div>';
+                cleanupSearch();
+            }
+        }
+        
+        function cleanupSearch() {
+            isSearching = false;
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('cancelBtn').style.display = 'none';
+            document.getElementById('searchBtn').disabled = false;
+            document.getElementById('progressContainer').style.display = 'none';
+            document.getElementById('partialResults').style.display = 'none';
+        }
+        
         // Function to cancel an ongoing search
         function cancelSearch() {
             if (!isSearching) return;
@@ -777,6 +859,12 @@ def get_main_template():
             if (window.currentEventSource) {
                 window.currentEventSource.close();
                 window.currentEventSource = null;
+            }
+            
+            // If using polling
+            if (window.currentPollInterval) {
+                clearInterval(window.currentPollInterval);
+                window.currentPollInterval = null;
             }
             
             // If using AbortController for fetch
