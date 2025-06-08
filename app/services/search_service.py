@@ -94,12 +94,7 @@ class SearchService:
             raise ValueError("Torah text not loaded")
         
         # Generate variants and build automaton
-        # Limit variants for longer phrases to prevent memory issues
-        max_variants = 10000 if len(phrase) <= 10 else 5000
-        variant_tuples = self.letter_mappings.generate_all_variants(phrase, max_variants=max_variants)
-        
-        logger.info("variants_for_search", phrase=phrase, variants_count=len(variant_tuples))
-        
+        variant_tuples = self.letter_mappings.generate_all_variants(phrase)
         automaton = self._build_automaton(variant_tuples)
         
         # Perform parallel search
