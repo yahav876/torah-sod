@@ -47,15 +47,25 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin |
 systemctl enable docker
 systemctl start docker || error_exit "Failed to start Docker"
 
-# Install AWS CLI
-apt-get install -y unzip
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-./aws/install
+# Install AWS CLI (only if not already installed)
+if ! command -v aws &> /dev/null; then
+    log_info "Installing AWS CLI..."
+    apt-get install -y unzip
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    unzip awscliv2.zip
+    ./aws/install
+else
+    log_info "AWS CLI already installed, skipping installation"
+fi
 
-# Install CloudWatch Agent
-wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
-dpkg -i -E ./amazon-cloudwatch-agent.deb
+# Install CloudWatch Agent (only if not already installed)
+if [ ! -f "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent" ]; then
+    log_info "Installing CloudWatch Agent..."
+    wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+    dpkg -i -E ./amazon-cloudwatch-agent.deb
+else
+    log_info "CloudWatch Agent already installed, skipping installation"
+fi
 
 # Configure CloudWatch Agent
 cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
@@ -151,11 +161,28 @@ if [ -d "tzfanim" ]; then
     rm -rf tzfanim
 fi
 
-# Try HTTPS first, then SSH if that fails
-log_info "Trying HTTPS clone..."
-git clone ${github_repo} tzfanim || {
-    log_info "HTTPS clone failed, trying SSH..."
-    git clone git@github.com:yahav876/torah-sod.git tzfanim || error_exit "Failed to clone repository using all methods"
+# Try multiple repository URLs and methods
+log_info "Trying to clone repository..."
+
+# Try HTTPS with the provided URL
+log_info "Trying HTTPS clone with provided URL: ${github_repo}"
+git clone ${github_repo} tzfanim && {
+    log_info "Repository cloned successfully with provided URL"
+} || {
+    # Try HTTPS with explicit URL
+    log_info "Trying HTTPS clone with explicit URL..."
+    git clone https://github.com/yahav876/torah-sod.git tzfanim && {
+        log_info "Repository cloned successfully with explicit HTTPS URL"
+    } || {
+        # Try to download as a ZIP file as a last resort
+        log_info "Git clone failed, trying to download as ZIP..."
+        apt-get install -y unzip || log_info "Unzip already installed"
+        curl -L https://github.com/yahav876/torah-sod/archive/refs/heads/main.zip -o torah-sod.zip && {
+            unzip torah-sod.zip
+            mv torah-sod-main tzfanim
+            log_info "Repository downloaded as ZIP successfully"
+        } || error_exit "Failed to clone or download repository using all methods"
+    }
 }
 
 cd /opt/tzfanim
