@@ -601,6 +601,23 @@ def get_main_template():
             // Update progress bar immediately
             updateProgressBar(10);
             
+            // Make sure partial results container is visible
+            document.getElementById('partialResults').style.display = 'block';
+            
+            // Do an immediate check for partial results
+            try {
+                const initialResponse = await fetch(`/api/search/status/${jobId}`);
+                const initialData = await initialResponse.json();
+                console.log("Initial status check:", initialData);
+                
+                if (initialData.partial_results && initialData.partial_results.length > 0) {
+                    console.log("Initial partial results:", initialData.partial_results.length);
+                    updatePartialResults(initialData.partial_results);
+                }
+            } catch (error) {
+                console.error("Error in initial status check:", error);
+            }
+            
             // Start polling for partial results
             progressInterval = setInterval(async () => {
                 try {
@@ -618,7 +635,10 @@ def get_main_template():
                     
                     // Check for partial results
                     if (data.partial_results && data.partial_results.length > 0) {
+                        console.log("Received partial results from server:", data.partial_results.length);
                         updatePartialResults(data.partial_results);
+                    } else {
+                        console.log("No partial results in this update");
                     }
                     
                     // Check if search is complete
@@ -638,7 +658,7 @@ def get_main_template():
                         document.getElementById('cancelBtn').style.display = 'none';
                         document.getElementById('searchBtn').disabled = false;
                         document.getElementById('progressContainer').style.display = 'none';
-                        document.getElementById('partialResults').innerHTML = '';
+                        document.getElementById('partialResults').style.display = 'none';
                     }
                     
                     // Check for failure
@@ -654,7 +674,7 @@ def get_main_template():
                         document.getElementById('cancelBtn').style.display = 'none';
                         document.getElementById('searchBtn').disabled = false;
                         document.getElementById('progressContainer').style.display = 'none';
-                        document.getElementById('partialResults').innerHTML = '';
+                        document.getElementById('partialResults').style.display = 'none';
                     }
                     
                 } catch (error) {
@@ -704,6 +724,7 @@ def get_main_template():
             // Add new results that aren't already in the partial results
             for (const result of newResults) {
                 if (!partialResults.some(r => r.variant === result.variant)) {
+                    console.log("Adding new partial result:", result.variant);
                     partialResults.push(result);
                 }
             }
@@ -713,8 +734,8 @@ def get_main_template():
             
             // Display partial results
             if (partialResults.length > 0) {
-                let html = `<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">
-                    נמצאו ${partialResults.length} תוצאות חלקיות עד כה... (החיפוש עדיין מתבצע)
+                let html = `<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px; font-size: 18px;">
+                    תוצאות חלקיות שנמצאו עד כה: ${partialResults.length} (החיפוש עדיין מתבצע)
                 </div>`;
                 
                 // Display all partial results with real-time updates
