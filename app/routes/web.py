@@ -242,7 +242,20 @@ def get_main_template():
         .partial-results {
             font-style: italic;
             color: #7f8c8d;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 5px solid #3498db;
+        }
+        
+        .partial-result-item {
+            background: #fff;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         
         @keyframes spin {
@@ -271,10 +284,43 @@ def get_main_template():
             margin-bottom: 10px;
         }
         
+        .variant-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        .variant-header:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .variant-toggle {
+            font-size: 20px;
+            color: #7f8c8d;
+            transition: transform 0.3s;
+        }
+        
+        .variant-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+        
         .sources {
             color: #7f8c8d;
             margin-bottom: 15px;
             font-style: italic;
+        }
+        
+        .locations-container {
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        
+        .locations-container.collapsed {
+            max-height: 0;
         }
         
         .location {
@@ -590,18 +636,18 @@ def get_main_template():
             
             // Display partial results
             if (partialResults.length > 0) {
-                document.getElementById('partialResults').innerHTML = 
-                    `<div>נמצאו ${partialResults.length} תוצאות חלקיות עד כה...</div>`;
+                let html = `<div>נמצאו ${partialResults.length} תוצאות חלקיות עד כה...</div>`;
                 
-                // Display up to 3 partial results
-                const displayResults = partialResults.slice(0, 3);
-                let html = '';
+                // Display all partial results with real-time updates
+                partialResults.forEach((result, index) => {
+                    html += `<div class="partial-result-item">`;
+                    html += `<div class="variant">${result.variant}</div>`;
+                    html += `<div class="sources">מקורות: ${result.sources.join(', ')}</div>`;
+                    html += `</div>`;
+                });
                 
-                for (const result of displayResults) {
-                    html += `<div>${result.variant}</div>`;
-                }
-                
-                document.getElementById('partialResults').innerHTML += html;
+                document.getElementById('partialResults').innerHTML = html;
+                document.getElementById('partialResults').style.display = 'block';
             }
         }
         
@@ -623,10 +669,20 @@ def get_main_template():
             html += 'זמן חיפוש: ' + data.search_time + ' שניות';
             html += '</div>';
             
-            data.results.forEach(result => {
+            data.results.forEach((result, index) => {
+                const resultId = 'result-' + index;
                 html += '<div class="result-item">';
+                
+                // Collapsible variant header
+                html += '<div class="variant-header" onclick="toggleVariant(\'' + resultId + '\')">';
                 html += '<div class="variant">' + result.variant + '</div>';
+                html += '<div class="variant-toggle">▼</div>';
+                html += '</div>';
+                
                 html += '<div class="sources">מקורות: ' + result.sources.join(', ') + '</div>';
+                
+                // Collapsible locations container
+                html += '<div id="' + resultId + '" class="locations-container">';
                 
                 result.locations.forEach(location => {
                     html += '<div class="location">';
@@ -635,10 +691,40 @@ def get_main_template():
                     html += '</div>';
                 });
                 
-                html += '</div>';
+                html += '</div>'; // End locations-container
+                html += '</div>'; // End result-item
             });
             
             resultsDiv.innerHTML = html;
+            
+            // Initialize all location containers with proper height
+            data.results.forEach((result, index) => {
+                const container = document.getElementById('result-' + index);
+                if (container) {
+                    container.style.maxHeight = container.scrollHeight + 'px';
+                }
+            });
+        }
+        
+        // Function to toggle variant expansion/collapse
+        function toggleVariant(resultId) {
+            const container = document.getElementById(resultId);
+            const header = container.previousElementSibling.previousElementSibling;
+            const toggle = header.querySelector('.variant-toggle');
+            
+            if (container.classList.contains('collapsed')) {
+                // Expand
+                container.classList.remove('collapsed');
+                container.style.maxHeight = container.scrollHeight + 'px';
+                toggle.classList.remove('collapsed');
+                toggle.textContent = '▼';
+            } else {
+                // Collapse
+                container.classList.add('collapsed');
+                container.style.maxHeight = '0';
+                toggle.classList.add('collapsed');
+                toggle.textContent = '◀';
+            }
         }
         
         // Function to clear all search caches
