@@ -136,6 +136,9 @@ def search_stream():
         # Log search request
         logger.info("search_stream_request", phrase=phrase, type=search_type, ip=get_remote_address())
         
+        # Get app instance before entering generator
+        app = current_app._get_current_object()
+        
         def generate():
             """Generator function for SSE."""
             # Create a queue for partial results
@@ -143,9 +146,6 @@ def search_stream():
             all_results = []
             search_complete = threading.Event()
             final_result = {}
-            
-            # Get the current app for the thread
-            app = current_app._get_current_object()
             
             def partial_results_callback(partial_results):
                 """Callback to handle partial results."""
@@ -286,35 +286,42 @@ def search_live():
             'final_result': None
         }))
         
+        # Get app instance for thread
+        app = current_app._get_current_object()
+        
         # Start search in background thread
         def search_worker():
             try:
-                all_results = []
-                
-                def partial_results_callback(partial_results):
-                    """Store partial results in Redis."""
-                    if partial_results:
-                        # Get current state
-                        current_state = json.loads(redis.get(session_key) or '{}')
-                        
-                        # Add new results
-                        for result in partial_results:
-                            if result['variant'] not in [r['variant'] for r in all_results]:
-                                all_results.append(result)
-                        
-                        # Update Redis
-                        current_state['partial_results'] = all_results
-                        current_state['status'] = 'running'
-                        redis.setex(session_key, 300, json.dumps(current_state))
-                
-                # Perform search
-                if search_type == 'memory':
-                    with SearchService() as search_service:
+                with app.app_context():
+                    all_results = []
+                    
+                    def partial_results_callback(partial_results):
+                        """Store partial results in Redis."""
+                        if partial_results:
+                            # Get current state
+                            current_state = json.loads(redis.get(session_key) or '{}')
+                            
+                            # Add new results
+                            for result in partial_results:
+                                if result['variant'] not in [r['variant'] for r in all_results]:
+                                    all_results.append(result)
+                            
+                            # Update Redis
+                            current_state['partial_results'] = all_results
+                            current_state['status'] = 'running'
+                            redis.setex(session_key, 300, json.dumps(current_state))
+                    
+                    # Log that we're in app context
+                    logger.info("search_worker_started", phrase=phrase, search_type=search_type)
+                    
+                    # Perform search
+                    if search_type == 'memory':
+                        with SearchService() as search_service:
+                            final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                    else:
+                        from app.services.indexed_search_service import IndexedSearchService
+                        search_service = IndexedSearchService()
                         final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
-                else:
-                    from app.services.indexed_search_service import IndexedSearchService
-                    search_service = IndexedSearchService()
-                    final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
                 
                 # Store final result
                 final_state = {
