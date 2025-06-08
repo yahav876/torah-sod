@@ -138,6 +138,9 @@ def search_stream():
             search_complete = threading.Event()
             final_result = {}
             
+            # Get the current app for the thread
+            app = current_app._get_current_object()
+            
             def partial_results_callback(partial_results):
                 """Callback to handle partial results."""
                 if partial_results:
@@ -147,14 +150,16 @@ def search_stream():
                 """Worker thread to perform the search."""
                 nonlocal final_result
                 try:
-                    # Choose search service based on type
-                    if search_type == 'memory':
-                        with SearchService() as search_service:
+                    # Create application context for the thread
+                    with app.app_context():
+                        # Choose search service based on type
+                        if search_type == 'memory':
+                            with SearchService() as search_service:
+                                final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                        else:
+                            from app.services.indexed_search_service import IndexedSearchService
+                            search_service = IndexedSearchService()
                             final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
-                    else:
-                        from app.services.indexed_search_service import IndexedSearchService
-                        search_service = IndexedSearchService()
-                        final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
                 except Exception as e:
                     logger.error("search_worker_error", error=str(e))
                     final_result = {'error': str(e), 'success': False}
