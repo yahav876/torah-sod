@@ -25,6 +25,48 @@ log_info "Updating system packages..."
 apt-get update || error_exit "Failed to update package list"
 apt-get upgrade -y || error_exit "Failed to upgrade packages"
 
+# Optimize system settings for high performance
+log_info "Optimizing system settings for c5.4xlarge..."
+cat > /etc/sysctl.d/99-performance.conf <<EOF
+# Increase file descriptors
+fs.file-max = 2097152
+
+# Increase TCP max buffer size
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+
+# Increase Linux autotuning TCP buffer limits
+net.ipv4.tcp_rmem = 4096 87380 16777216
+net.ipv4.tcp_wmem = 4096 65536 16777216
+
+# Increase the maximum amount of option memory buffers
+net.core.optmem_max = 65536
+
+# Increase the maximum number of connections
+net.core.somaxconn = 65535
+
+# Increase the maximum backlog of connection requests
+net.core.netdev_max_backlog = 65536
+
+# Reuse TIME_WAIT sockets
+net.ipv4.tcp_tw_reuse = 1
+
+# Increase system memory for shm
+kernel.shmmax = 17179869184
+kernel.shmall = 4194304
+EOF
+
+# Apply sysctl settings
+sysctl -p /etc/sysctl.d/99-performance.conf || log_info "Some sysctl settings may not be applied"
+
+# Set ulimits for the ubuntu user
+cat > /etc/security/limits.d/ubuntu.conf <<EOF
+ubuntu soft nofile 64000
+ubuntu hard nofile 64000
+ubuntu soft nproc 32000
+ubuntu hard nproc 32000
+EOF
+
 # Install Docker
 log_info "Installing Docker..."
 apt-get install -y \
@@ -204,14 +246,22 @@ AWS_DEFAULT_REGION=${aws_region}
 FLASK_ENV=${environment}
 EOF
 
-# Configure Docker logging first
-log_info "Configuring Docker logging..."
+# Configure Docker with optimized settings for c5.4xlarge
+log_info "Configuring Docker with optimized settings..."
 cat > /etc/docker/daemon.json <<EOF
 {
   "log-driver": "json-file",
   "log-opts": {
     "max-size": "100m",
     "max-file": "3"
+  },
+  "default-shm-size": "2g",
+  "default-ulimits": {
+    "nofile": {
+      "Name": "nofile",
+      "Hard": 64000,
+      "Soft": 64000
+    }
   }
 }
 EOF

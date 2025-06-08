@@ -19,7 +19,7 @@ variable "availability_zones" {
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
-  default     = "t3.xlarge"
+  default     = "c5.4xlarge"  # 16 vCPUs, optimized for compute-intensive workloads
 }
 
 variable "key_pair_name" {

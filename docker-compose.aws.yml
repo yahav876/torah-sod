@@ -12,10 +12,10 @@ services:
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - MAX_WORKERS=8  # Increased for better parallel search performance
-      - BATCH_SIZE_MULTIPLIER=150  # Balanced batch size
-      - REDIS_POOL_SIZE=20
-      - REDIS_MAX_CONNECTIONS=40
+      - MAX_WORKERS=16  # Optimized for c5.4xlarge with 16 vCPUs
+      - BATCH_SIZE_MULTIPLIER=300  # Increased for c5.4xlarge with 16 vCPUs
+      - REDIS_POOL_SIZE=40
+      - REDIS_MAX_CONNECTIONS=80
       - PROMETHEUS_METRICS=true
       - USE_BOOK_PARALLEL_SEARCH=true  # Enable book-based parallel search
     volumes:
@@ -24,9 +24,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G
+          memory: 16G
         reservations:
-          memory: 4G
+          memory: 8G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -39,7 +39,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=8
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=16
     environment:
       - FLASK_ENV=${FLASK_ENV}
       - DATABASE_URL=${DATABASE_URL}
@@ -51,6 +51,12 @@ services:
     volumes:
       - ./torah.txt:/app/torah.txt:ro
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 8G
     networks:
       - tzfanim-network
 
