@@ -82,7 +82,7 @@ services:
     networks:
       - torah-network
 
-  # Redis (shared)
+  # Redis (shared) - Remove if using ElastiCache
   redis:
     image: redis:7-alpine
     command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
