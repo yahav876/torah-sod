@@ -1,6 +1,6 @@
 # Torah Search Web Application
 
-🔍 **Torah Search (torah-sod)** - A production-ready web application for searching Hebrew text in the Torah using various letter mapping techniques.
+🔍 **Torah Search (tzfanim)** - A production-ready web application for searching Hebrew text in the Torah using various letter mapping techniques.
 
 ## 🌟 Features
 
@@ -18,8 +18,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yahav876/torah-sod.git
-cd torah-sod
+git clone https://github.com/yahav876/tzfanim.git
+cd tzfanim
 
 # Start with Docker Compose
 docker-compose up -d
@@ -111,7 +111,7 @@ curl http://localhost:8080/health
 ## 📁 Project Structure
 
 ```
-torah-sod/
+tzfanim/
 ├── app_web.py              # Main Flask application
 ├── wsgi.py                 # WSGI entry point
 ├── requirements.txt        # Python dependencies
@@ -209,4 +209,4 @@ This project is provided for educational and research purposes.
 
 **Built with ❤️ for Torah study and research**
 
-🔗 **Repository**: https://github.com/yahav876/torah-sod
+🔗 **Repository**: https://github.com/yahav876/tzfanim

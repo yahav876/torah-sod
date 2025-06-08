@@ -136,7 +136,14 @@ class SearchService:
         """Perform parallel search across Torah text with AWS optimization."""
         grouped_matches = defaultdict(list)
         
-        # Optimize for t3.2xlarge (8 vCPU, 32GB RAM)
+        # Check if we should use book-based parallelization
+        use_book_parallel = current_app.config.get('USE_BOOK_PARALLEL_SEARCH', False)
+        
+        if use_book_parallel:
+            # Use book-based parallelization
+            return self._search_parallel_by_books(automaton, lines, phrase_length, input_phrase, full_text, partial_results_callback)
+        
+        # Original line-based parallelization
         num_workers = current_app.config['MAX_WORKERS']  # Use full worker capacity
         batch_multiplier = current_app.config.get('BATCH_SIZE_MULTIPLIER', 150)
         batch_size = max(batch_multiplier, len(lines) // num_workers)
@@ -185,6 +192,95 @@ class SearchService:
                     logger.error("batch_search_error", batch=batch_idx, error=str(e))
         
         return grouped_matches
+    
+    def _search_parallel_by_books(self, automaton, lines, phrase_length, input_phrase, full_text, partial_results_callback=None):
+        """Perform parallel search across Torah text by dividing work by books."""
+        grouped_matches = defaultdict(list)
+        
+        # Group lines by book
+        book_lines = self._group_lines_by_book(lines)
+        
+        # Log the books found
+        logger.info("parallel_search_by_books", books=list(book_lines.keys()))
+        
+        # Use context manager for thread pool
+        num_workers = min(len(book_lines), current_app.config['MAX_WORKERS'])
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            # Submit search for each book
+            future_to_book = {
+                executor.submit(
+                    self._search_batch,
+                    book_lines[book], automaton, phrase_length, input_phrase, full_text
+                ): book
+                for book in book_lines
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_book):
+                try:
+                    book = future_to_book[future]
+                    book_results = future.result(timeout=60)  # Longer timeout for book search
+                    
+                    # Process book results
+                    book_partial_results = []
+                    
+                    for variant, source, book_name, chapter, verse_num, marked_text in book_results:
+                        grouped_matches[(variant, source)].append({
+                            'book': book_name,
+                            'chapter': chapter,
+                            'verse': verse_num,
+                            'text': marked_text
+                        })
+                        
+                        # Add to partial results
+                        if variant not in [r['variant'] for r in book_partial_results]:
+                            book_partial_results.append({
+                                'variant': variant,
+                                'sources': list(source)
+                            })
+                    
+                    # Call the callback with partial results if provided
+                    if partial_results_callback and book_partial_results:
+                        partial_results_callback(book_partial_results)
+                    
+                    logger.info("book_search_completed", book=book, results_count=len(book_results))
+                        
+                except Exception as e:
+                    book = future_to_book[future]
+                    logger.error("book_search_error", book=book, error=str(e))
+        
+        return grouped_matches
+    
+    def _group_lines_by_book(self, lines):
+        """Group Torah lines by book."""
+        book_lines = {}
+        current_book = None
+        current_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Check for book/chapter headers
+            match = re.match(r'^(\S+)\s+\u05e4\u05e8\u05e7-([\u05d0-\u05ea]+)$', line)
+            if match:
+                book, _ = match.groups()
+                
+                # If we found a new book, save the previous book's lines
+                if current_book and current_book != book and current_lines:
+                    book_lines[current_book] = current_lines
+                    current_lines = []
+                
+                current_book = book
+            
+            # Add the line to the current book
+            if current_book:
+                current_lines.append(line)
+        
+        # Add the last book
+        if current_book and current_lines:
+            book_lines[current_book] = current_lines
+        
+        return book_lines
     
     def _search_batch(self, batch_lines, automaton, phrase_length, input_phrase, full_text):
         """Search for patterns in a batch of lines."""

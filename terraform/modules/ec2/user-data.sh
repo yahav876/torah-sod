@@ -96,13 +96,13 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
       "files": {
         "collect_list": [
           {
-            "file_path": "/var/log/torah-sod/*.log",
+            "file_path": "/var/log/tzfanim/*.log",
             "log_group_name": "/aws/ec2/${project_name}-${environment}",
             "log_stream_name": "{instance_id}/app",
             "timezone": "UTC"
           },
           {
-            "file_path": "/opt/torah-sod/logs/*.log",
+            "file_path": "/opt/tzfanim/logs/*.log",
             "log_group_name": "/aws/ec2/${project_name}-${environment}",
             "log_stream_name": "{instance_id}/app-docker",
             "timezone": "UTC"
@@ -140,19 +140,19 @@ EOF
   -s
 
 # Create app directory and logs
-mkdir -p /opt/torah-sod
-mkdir -p /var/log/torah-sod
+mkdir -p /opt/tzfanim
+mkdir -p /var/log/tzfanim
 
 # Clone repository (remove existing directory first if it exists)
-log_info "Cloning Torah-Sod repository..."
+log_info "Cloning Tzfanim repository..."
 cd /opt
-if [ -d "torah-sod" ]; then
-    log_info "Removing existing torah-sod directory..."
-    rm -rf torah-sod
+if [ -d "tzfanim" ]; then
+    log_info "Removing existing tzfanim directory..."
+    rm -rf tzfanim
 fi
 
-git clone ${github_repo} torah-sod || error_exit "Failed to clone repository"
-cd /opt/torah-sod
+git clone ${github_repo} tzfanim || error_exit "Failed to clone repository"
+cd /opt/tzfanim
 git checkout dev || error_exit "Failed to checkout dev branch"
 
 # Create logs directory after clone
@@ -191,7 +191,7 @@ log_info "Logging into ECR..."
 aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query Account --output text).dkr.ecr.${aws_region}.amazonaws.com || error_exit "Failed to login to ECR"
 
 # Start the application with proper logging
-log_info "Starting Torah-Sod application..."
+log_info "Starting Tzfanim application..."
 docker compose -f docker-compose.aws.yml up -d || error_exit "Failed to start application containers"
 
 # Wait for containers to start
@@ -214,11 +214,11 @@ curl -X POST http://localhost/api/admin/build-index \
   2>/dev/null || log_info "Search index will be built on first search"
 
 # Create symlink for easier log access (don't fail if no containers yet)
-ln -sf /var/lib/docker/containers/*/torah-*.log /opt/torah-sod/logs/ 2>/dev/null || log_info "No Torah containers found yet"
+ln -sf /var/lib/docker/containers/*/tzfanim-*.log /opt/tzfanim/logs/ 2>/dev/null || log_info "No Tzfanim containers found yet"
 
 # Setup log rotation
-cat > /etc/logrotate.d/torah-sod <<EOF
-/var/log/torah-sod/*.log {
+cat > /etc/logrotate.d/tzfanim <<EOF
+/var/log/tzfanim/*.log {
     daily
     rotate 7
     compress
@@ -229,7 +229,7 @@ cat > /etc/logrotate.d/torah-sod <<EOF
 }
 EOF
 
-log_info "Torah-Sod application deployment completed!"
+log_info "Tzfanim application deployment completed!"
 log_info "Final container status:"
 docker ps
 log_info "User data script finished successfully"

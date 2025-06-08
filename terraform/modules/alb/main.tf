@@ -70,7 +70,8 @@ resource "aws_lb_listener" "http" {
 
 # HTTPS listener (only if certificate is provided)
 resource "aws_lb_listener" "https" {
-  count = var.certificate_arn != "" ? 1 : 0
+  # Use for_each instead of count to avoid the "count depends on resource attributes" error
+  for_each = var.enable_https ? toset(["https"]) : toset([])
 
   load_balancer_arn = aws_lb.main.arn
   port              = "443"

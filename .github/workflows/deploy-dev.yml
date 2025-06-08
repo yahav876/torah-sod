@@ -7,7 +7,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: torah-sod
+  ECR_REPOSITORY: tzfanim
   ENVIRONMENT: dev
 
 jobs:
@@ -95,7 +95,7 @@ jobs:
     - name: Update ASG with new image
       run: |
         ASG_NAME=$(aws autoscaling describe-auto-scaling-groups \
-          --query "AutoScalingGroups[?contains(AutoScalingGroupName, 'torah-sod-dev')].AutoScalingGroupName" \
+          --query "AutoScalingGroups[?contains(AutoScalingGroupName, 'tzfanim-dev')].AutoScalingGroupName" \
           --output text)
         
         aws autoscaling start-instance-refresh \

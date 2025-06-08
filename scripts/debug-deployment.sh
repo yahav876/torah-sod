@@ -5,10 +5,10 @@ set -e
 
 PROFILE="yahav"
 REGION="us-east-1"
-PROJECT="torah-sod"
+PROJECT="tzfanim"
 ENV="dev"
 
-echo "🔍 Debugging Torah-Sod Deployment..."
+echo "🔍 Debugging Tzfanim Deployment..."
 
 # Get ALB and Target Group info
 echo -e "\n📊 Getting ALB and Target Group info..."
@@ -63,8 +63,8 @@ for INSTANCE_ID in $INSTANCE_IDS; do
   echo "Run these commands after connecting:"
   echo "  1. Check user-data log: sudo tail -100 /var/log/cloud-init-output.log"
   echo "  2. Check Docker: docker ps"
-  echo "  3. Check nginx: docker logs torah-sod-nginx-1"
-  echo "  4. Check app: docker logs torah-sod-torah-search-1"
+  echo "  3. Check nginx: docker logs tzfanim-nginx-1"
+  echo "  4. Check app: docker logs tzfanim-torah-search-1"
   echo "  5. Test health: curl -v http://localhost/api/health"
   echo ""
   echo "Press Enter to connect to $INSTANCE_ID (or Ctrl+C to skip)..."

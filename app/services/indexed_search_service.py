@@ -282,6 +282,12 @@ class IndexedSearchService:
         variant_count = len(all_variants)
         logger.info("variants_generated", word=word, variant_count=variant_count)
         
+        # Check if we should use book-based parallelization
+        use_book_parallel = current_app.config.get('USE_BOOK_PARALLEL_SEARCH', False)
+        
+        if use_book_parallel:
+            return self._search_single_word_by_books(word, all_variants, partial_results_callback)
+        
         # Create a SQL query that uses a temporary table for better performance
         # This is much faster than using multiple OR conditions
         results = []
@@ -362,6 +368,148 @@ class IndexedSearchService:
             'total_variants': len(results),
             'method': 'optimized_single_word_search'
         }
+    
+    def _search_single_word_by_books(self, word, all_variants, partial_results_callback=None):
+        """Perform parallel search across Torah books for a single word with variants."""
+        logger.info("book_parallel_search", word=word)
+        
+        # Get all books from the database
+        books = db.session.query(db.func.distinct(TorahVerse.book)).all()
+        books = [book[0] for book in books]
+        
+        logger.info("parallel_search_by_books", books=books)
+        
+        # Use ThreadPoolExecutor for parallel processing
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        results = []
+        grouped_matches = defaultdict(list)
+        
+        # Use context manager for thread pool
+        num_workers = min(len(books), current_app.config['MAX_WORKERS'])
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            # Submit search for each book
+            future_to_book = {
+                executor.submit(
+                    self._search_book_for_variants,
+                    book, all_variants
+                ): book
+                for book in books
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_book):
+                try:
+                    book = future_to_book[future]
+                    book_results = future.result(timeout=60)  # Longer timeout for book search
+                    
+                    # Process book results
+                    book_partial_results = []
+                    
+                    for variant, sources, locations in book_results:
+                        # Add locations to grouped matches
+                        grouped_matches[(variant, sources)].extend(locations)
+                        
+                        # Add to partial results
+                        if variant not in [r['variant'] for r in book_partial_results]:
+                            book_partial_results.append({
+                                'variant': variant,
+                                'sources': list(sources)
+                            })
+                    
+                    # Call the callback with partial results if provided
+                    if partial_results_callback and book_partial_results:
+                        partial_results_callback(book_partial_results)
+                    
+                    logger.info("book_search_completed", book=book, results_count=len(book_results))
+                        
+                except Exception as e:
+                    book = future_to_book[future]
+                    logger.error("book_search_error", book=book, error=str(e))
+        
+        # Format results
+        for (variant, sources), locations in grouped_matches.items():
+            results.append({
+                'variant': variant,
+                'sources': list(sources),
+                'locations': locations[:100]  # Limit locations per variant
+            })
+        
+        return {
+            'results': results,
+            'total_variants': len(grouped_matches),
+            'method': 'book_parallel_search'
+        }
+    
+    def _search_book_for_variants(self, book, all_variants):
+        """Search for variants in a specific book."""
+        results = []
+        
+        try:
+            # Create a temporary table with all variants
+            with db.engine.connect() as connection:
+                # Create a temporary table
+                connection.execute(text("CREATE TEMPORARY TABLE IF NOT EXISTS temp_variants_book (variant TEXT, source TEXT)"))
+                
+                # Clear any existing data
+                connection.execute(text("DELETE FROM temp_variants_book"))
+                
+                # Insert variants in batches
+                batch_size = 100
+                for i in range(0, len(all_variants), batch_size):
+                    batch = all_variants[i:i+batch_size]
+                    
+                    # Prepare batch insert
+                    insert_values = []
+                    for variant, sources in batch:
+                        insert_values.append({"variant": variant, "source": ",".join(sources)})
+                    
+                    if insert_values:
+                        connection.execute(
+                            text("INSERT INTO temp_variants_book (variant, source) VALUES (:variant, :source)"),
+                            insert_values
+                        )
+                
+                # Query verses in this book that contain any variant
+                result = connection.execute(text("""
+                    SELECT v.book, v.chapter, v.verse, v.text, tv.variant, tv.source
+                    FROM torah_verses v
+                    JOIN temp_variants_book tv ON v.text LIKE '%' || tv.variant || '%'
+                    WHERE v.book = :book
+                    LIMIT :limit
+                """), {"book": book, "limit": current_app.config['MAX_RESULTS']})
+                
+                # Process results
+                grouped_by_variant = {}
+                
+                for row in result:
+                    # Highlight the variant
+                    highlighted_text = row.text.replace(row.variant, f'[{row.variant}]', 1)
+                    
+                    location = {
+                        'book': row.book,
+                        'chapter': row.chapter,
+                        'verse': row.verse,
+                        'text': highlighted_text
+                    }
+                    
+                    # Group by variant
+                    variant_key = (row.variant, tuple(row.source.split(',')))
+                    if variant_key not in grouped_by_variant:
+                        grouped_by_variant[variant_key] = []
+                    grouped_by_variant[variant_key].append(location)
+                
+                # Clean up
+                connection.execute(text("DROP TABLE IF EXISTS temp_variants_book"))
+                
+                # Format results for this book
+                for (variant, sources), locations in grouped_by_variant.items():
+                    results.append((variant, sources, locations))
+                
+        except Exception as e:
+            logger.error("book_search_error", book=book, error=str(e), exc_info=True)
+        
+        return results
     
     def _search_long_phrase(self, words, original_phrase, partial_results_callback=None):
         """Fallback for very long phrases using text search."""

@@ -1,4 +1,4 @@
-# Torah-Sod AWS Deployment Guide
+# Tzfanim AWS Deployment Guide
 
 ## Architecture Overview
 
@@ -8,6 +8,8 @@ The application is deployed on AWS with the following components:
 - **RDS PostgreSQL**: Managed database for persistent storage
 - **ElastiCache Redis**: Caching and Celery message broker
 - **VPC**: Network isolation with public/private subnets
+- **Route53**: DNS management for domain
+- **ACM**: SSL/TLS certificate management with automatic validation
 
 ## Prerequisites
 
@@ -23,7 +25,7 @@ The application is deployed on AWS with the following components:
 
 ```bash
 # In AWS Console: EC2 → Key Pairs → Create key pair
-# Name: torah-sod-dev-key
+# Name: tzfanim-dev-key
 # Download the .pem file and save it securely
 ```
 
@@ -55,7 +57,7 @@ Add these secrets to your GitHub repository:
 Edit `terraform/environments/dev/main.tf`:
 ```hcl
 locals {
-  github_repo = "https://github.com/YOUR_USERNAME/torah-sod.git"  # Update this!
+  github_repo = "https://github.com/YOUR_USERNAME/tzfanim.git"  # Update this!
 }
 ```
 
@@ -106,21 +108,21 @@ After deployment:
 ```bash
 # Get instance IP
 aws ec2 describe-instances \
-  --filters "Name=tag:Project,Values=torah-sod" \
+  --filters "Name=tag:Project,Values=tzfanim" \
   --query 'Reservations[0].Instances[0].PublicIpAddress' \
   --output text \
   --profile yahav
 
 # SSH to instance
-ssh -i path/to/torah-sod-dev-key.pem ubuntu@<instance-ip>
+ssh -i path/to/tzfanim-dev-key.pem ubuntu@<instance-ip>
 ```
 
 ### View Logs
 
 ```bash
 # On the instance
-docker logs torah-sod-torah-search-1
-docker logs torah-sod-celery-worker-1
+docker logs tzfanim-tzfanim-search-1
+docker logs tzfanim-celery-worker-1
 ```
 
 ### Update Application
@@ -130,7 +132,7 @@ To manually update:
 
 ```bash
 # SSH to instance
-cd /opt/torah-sod
+cd /opt/tzfanim
 git pull origin dev
 docker compose -f docker-compose.production.yml down
 docker compose -f docker-compose.production.yml up -d
@@ -141,7 +143,7 @@ docker compose -f docker-compose.production.yml up -d
 ### CloudWatch Logs
 
 Logs are automatically sent to CloudWatch:
-- Log Group: `/aws/ec2/torah-sod-dev`
+- Log Group: `/aws/ec2/tzfanim-dev`
 - Streams: `{instance-id}/app`, `{instance-id}/docker`
 
 ### Metrics
@@ -188,7 +190,7 @@ docker logs <container-name>
 ### Database Connection Issues
 ```bash
 # Test connection from instance
-docker exec -it torah-sod-torah-search-1 bash
+docker exec -it tzfanim-tzfanim-search-1 bash
 apt-get update && apt-get install -y postgresql-client
 psql -h <rds-endpoint> -U torah_user -d torah_db
 ```
@@ -223,4 +225,4 @@ terraform destroy
 2. Add monitoring with CloudWatch dashboards
 3. Implement backup strategy for RDS
 4. Add CI/CD tests before deployment
-5. Configure custom domain with Route 53
+5. Configure HTTPS with automatic certificate renewal

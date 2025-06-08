@@ -74,6 +74,9 @@ class BaseConfig:
     MAX_WORKERS = int(os.environ.get('MAX_WORKERS', '12'))  # 1.5x vCPUs for I/O bound tasks
     WORKER_MEMORY_LIMIT = int(os.environ.get('WORKER_MEMORY_LIMIT', '2048'))  # MB - more memory per worker
     BATCH_SIZE_MULTIPLIER = int(os.environ.get('BATCH_SIZE_MULTIPLIER', '150'))  # Optimized batch size
+    
+    # Parallel search settings
+    USE_BOOK_PARALLEL_SEARCH = os.environ.get('USE_BOOK_PARALLEL_SEARCH', 'false').lower() == 'true'
 
 
 class DevelopmentConfig(BaseConfig):
@@ -145,7 +148,7 @@ class AWSConfig(ProductionConfig):
     AWS_S3_BUCKET = os.environ.get('AWS_S3_BUCKET')
     
     # CloudWatch logging
-    CLOUDWATCH_LOG_GROUP = os.environ.get('CLOUDWATCH_LOG_GROUP', 'torah-search')
+    CLOUDWATCH_LOG_GROUP = os.environ.get('CLOUDWATCH_LOG_GROUP', 'tzfanim-search')
     
     # Auto-scaling settings
     MIN_WORKERS = int(os.environ.get('MIN_WORKERS', '2'))

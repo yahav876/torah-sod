@@ -41,7 +41,7 @@ output "route53_name_servers" {
 
 output "acm_certificate_status" {
   description = "Status of the ACM certificate"
-  value       = data.aws_acm_certificate.wildcard.status
+  value       = module.acm.certificate_status
 }
 
 output "launch_template_info" {

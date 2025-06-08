@@ -5,7 +5,7 @@ set -e
 
 AWS_PROFILE="yahav"
 AWS_REGION="us-east-1"
-REPOSITORY_NAME="torah-sod"
+REPOSITORY_NAME="tzfanim"
 
 echo "Setting up ECR repository..."
 

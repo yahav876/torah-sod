@@ -1,13 +1,13 @@
 #!/bin/bash
 
-echo "🔍 Torah-Sod Deployment Monitor"
+echo "🔍 Tzfanim Deployment Monitor"
 echo "================================"
 
 # Function to check instance refresh status
 check_refresh_status() {
     echo "📊 Instance Refresh Status:"
     aws autoscaling describe-instance-refreshes \
-        --auto-scaling-group-name torah-sod-dev-asg \
+        --auto-scaling-group-name tzfanim-dev-asg \
         --region us-east-1 \
         --profile yahav \
         --query 'InstanceRefreshes[0].{Status:Status,PercentageComplete:PercentageComplete,StatusReason:StatusReason}' \
@@ -20,7 +20,7 @@ check_asg_instances() {
     aws autoscaling describe-auto-scaling-instances \
         --region us-east-1 \
         --profile yahav \
-        --query 'AutoScalingInstances[?AutoScalingGroupName==`torah-sod-dev-asg`].{InstanceId:InstanceId,LifecycleState:LifecycleState,HealthStatus:HealthStatus,LaunchTemplate:LaunchTemplate.Version}' \
+        --query 'AutoScalingInstances[?AutoScalingGroupName==`tzfanim-dev-asg`].{InstanceId:InstanceId,LifecycleState:LifecycleState,HealthStatus:HealthStatus,LaunchTemplate:LaunchTemplate.Version}' \
         --output table
 }
 
@@ -28,7 +28,7 @@ check_asg_instances() {
 check_alb_health() {
     echo "🎯 ALB Target Health:"
     TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups \
-        --names torah-sod-dev-tg \
+        --names tzfanim-dev-tg \
         --region us-east-1 \
         --profile yahav \
         --query 'TargetGroups[0].TargetGroupArn' \
@@ -46,7 +46,7 @@ check_alb_health() {
 check_user_data_logs() {
     echo "📝 Recent User-Data Log Entries:"
     aws logs filter-log-events \
-        --log-group-name "/aws/ec2/torah-sod-dev" \
+        --log-group-name "/aws/ec2/tzfanim-dev" \
         --region us-east-1 \
         --profile yahav \
         --start-time $(date -d '30 minutes ago' +%s)000 \
@@ -62,16 +62,16 @@ test_application() {
     # Test health endpoint
     echo "Testing health endpoint..."
     curl -s -w "\nHTTP Status: %{http_code}\nResponse Time: %{time_total}s\n" \
-        http://torah-sod-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/health || echo "Health endpoint failed"
+        http://tzfanim-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/health || echo "Health endpoint failed"
     
     echo -e "\nTesting performance endpoint..."
-    curl -s http://torah-sod-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/performance | jq '.performance_config.max_workers' 2>/dev/null || echo "Performance endpoint not ready"
+    curl -s http://tzfanim-dev-alb-1291999354.us-east-1.elb.amazonaws.com/api/performance | jq '.performance_config.max_workers' 2>/dev/null || echo "Performance endpoint not ready"
 }
 
 # Main monitoring loop
 while true; do
     clear
-    echo "🔍 Torah-Sod Deployment Monitor - $(date)"
+    echo "🔍 Tzfanim Deployment Monitor - $(date)"
     echo "========================================"
     
     check_refresh_status

@@ -37,8 +37,8 @@ provider "aws" {
 
 locals {
   environment = "dev"
-  github_repo = "https://github.com/yahav876/torah-sod.git"  # Fixed typo: was .gitls
-  domain_name = "torah-sod.com"
+  github_repo = "https://github.com/yahav876/tzfanim.git"
+  domain_name = "tzfanim.com"
 }
 
 # Create Route53 Hosted Zone first
@@ -50,11 +50,14 @@ module "route53_zone" {
   project_name = var.project_name
 }
 
-# Data source to find the ACM certificate (including PENDING_VALIDATION)
-data "aws_acm_certificate" "wildcard" {
-  domain      = "*.${local.domain_name}"
-  statuses    = ["ISSUED", "PENDING_VALIDATION"]
-  most_recent = true
+# ACM Module for certificate management and validation
+module "acm" {
+  source = "../../modules/acm"
+
+  domain_name  = local.domain_name
+  zone_id      = module.route53_zone.zone_id
+  project_name = var.project_name
+  environment  = local.environment
 }
 
 # VPC Module
@@ -87,7 +90,8 @@ module "alb" {
   vpc_id                = module.vpc.vpc_id
   public_subnet_ids     = module.vpc.public_subnet_ids
   alb_security_group_id = module.security.alb_security_group_id
-  certificate_arn       = data.aws_acm_certificate.wildcard.status == "ISSUED" ? data.aws_acm_certificate.wildcard.arn : ""
+  certificate_arn       = module.acm.certificate_arn
+  enable_https          = true
 }
 
 # Generate a random password for RDS
@@ -152,7 +156,7 @@ module "route53" {
   alb_dns_name         = module.alb.alb_dns_name
   alb_zone_id          = module.alb.alb_zone_id
   environment          = local.environment
-  create_env_subdomain = true  # This will create dev.torah-sod.com
+  create_env_subdomain = true  # This will create dev.tzfanim.com
   lookup_hosted_zone   = false  # Don't lookup, we're creating it with route53_zone module
   zone_id              = module.route53_zone.zone_id
 }
