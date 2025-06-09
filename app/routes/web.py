@@ -447,6 +447,17 @@ def get_main_template():
             margin-bottom: 8px;
         }
         
+        .clickable-location {
+            cursor: pointer;
+            text-decoration: underline;
+            transition: all 0.2s;
+        }
+        
+        .clickable-location:hover {
+            color: #c0392b;
+            transform: translateY(-1px);
+        }
+        
         .verse-text {
             line-height: 1.6;
             font-size: 12px; /* Reduced by 25% from 16px */
@@ -570,6 +581,22 @@ def get_main_template():
                 <button id="searchInChapter" class="search-context-option">חפש בפרק</button>
             </div>
             <button id="closeContextModal" class="search-context-close">סגור</button>
+        </div>
+    </div>
+    
+    <!-- Location Search Modal -->
+    <div id="locationSearchModal" class="search-context-modal">
+        <div class="search-context-content">
+            <div class="search-context-title">חיפוש חדש ב<span id="locationContextText"></span></div>
+            <div>הכנס מילה לחיפוש:</div>
+            <div style="margin: 20px 0;">
+                <input type="text" id="locationSearchInput" placeholder="הכנס מילה או ביטוי..." style="padding: 10px; width: 80%; text-align: right; direction: rtl;" />
+            </div>
+            <div class="search-context-options">
+                <button id="searchLocationVerse" class="search-context-option">חפש בפסוק</button>
+                <button id="searchLocationChapter" class="search-context-option">חפש בפרק</button>
+            </div>
+            <button id="closeLocationModal" class="search-context-close">סגור</button>
         </div>
     </div>
 
@@ -1129,7 +1156,12 @@ def get_main_template():
                 result.locations.forEach((location, locIndex) => {
                     const locationId = `${resultId}-loc-${locIndex}`;
                     html += '<div class="location" id="' + locationId + '">';
-                    html += '<div class="location-header">' + location.book + ' פרק ' + location.chapter + ', פסוק ' + location.verse + '</div>';
+                    
+                    // Make location header clickable for context search
+                    const locationData = `data-book="${location.book}" data-chapter="${location.chapter}" data-verse="${location.verse}"`;
+                    html += `<div class="location-header clickable-location" ${locationData}>
+                        ${location.book} פרק ${location.chapter}, פסוק ${location.verse}
+                    </div>`;
                     
                     // Store location data as attributes for context search
                     const locationData = `data-book="${location.book}" data-chapter="${location.chapter}" data-verse="${location.verse}"`;
@@ -1192,6 +1224,22 @@ def get_main_template():
                     
                     // Show context search modal
                     showSearchContextModal(variantText, sources, book, chapter, verse);
+                });
+            });
+            
+            // Add click event listeners to all clickable location headers
+            document.querySelectorAll('.clickable-location').forEach(location => {
+                location.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent triggering the variant header click
+                    
+                    // Get location data
+                    const book = this.getAttribute('data-book');
+                    const chapter = this.getAttribute('data-chapter');
+                    const verse = this.getAttribute('data-verse');
+                    
+                    // Show context search modal with empty variant text
+                    // This will allow the user to enter a new search term
+                    showLocationSearchModal(book, chapter, verse);
                 });
             });
         }
@@ -1367,6 +1415,105 @@ def get_main_template():
             // Execute the search
             document.getElementById('searchInput').value = searchQuery;
             search();
+        }
+        
+        // Function to show the location search modal
+        function showLocationSearchModal(book, chapter, verse) {
+            // Set the location text in the modal
+            let locationText = '';
+            if (verse) {
+                locationText = `${book} פרק ${chapter}, פסוק ${verse}`;
+            } else {
+                locationText = `${book} פרק ${chapter}`;
+            }
+            
+            // Create modal if it doesn't exist
+            let modal = document.getElementById('locationSearchModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'locationSearchModal';
+                modal.className = 'search-context-modal';
+                
+                const content = `
+                    <div class="search-context-content">
+                        <div class="search-context-title">חיפוש חדש ב<span id="locationContextText"></span></div>
+                        <div>הכנס מילה לחיפוש:</div>
+                        <div style="margin: 20px 0;">
+                            <input type="text" id="locationSearchInput" placeholder="הכנס מילה או ביטוי..." style="padding: 10px; width: 80%; text-align: right; direction: rtl;" />
+                        </div>
+                        <div class="search-context-options">
+                            <button id="searchLocationVerse" class="search-context-option">חפש בפסוק</button>
+                            <button id="searchLocationChapter" class="search-context-option">חפש בפרק</button>
+                        </div>
+                        <button id="closeLocationModal" class="search-context-close">סגור</button>
+                    </div>
+                `;
+                
+                modal.innerHTML = content;
+                document.body.appendChild(modal);
+            }
+            
+            // Set the location text
+            document.getElementById('locationContextText').textContent = locationText;
+            
+            // Clear the input field
+            const inputField = document.getElementById('locationSearchInput');
+            if (inputField) {
+                inputField.value = '';
+            }
+            
+            // Display the modal
+            modal.style.display = 'flex';
+            
+            // Focus the input field
+            setTimeout(() => {
+                document.getElementById('locationSearchInput').focus();
+            }, 100);
+            
+            // Set up event listeners for the modal buttons
+            document.getElementById('searchLocationVerse').onclick = function() {
+                const searchTerm = document.getElementById('locationSearchInput').value.trim();
+                if (searchTerm) {
+                    performContextSearch(searchTerm, 'verse', book, chapter, verse);
+                    modal.style.display = 'none';
+                } else {
+                    alert('אנא הכנס מילה או ביטוי לחיפוש');
+                }
+            };
+            
+            document.getElementById('searchLocationChapter').onclick = function() {
+                const searchTerm = document.getElementById('locationSearchInput').value.trim();
+                if (searchTerm) {
+                    performContextSearch(searchTerm, 'chapter', book, chapter, verse);
+                    modal.style.display = 'none';
+                } else {
+                    alert('אנא הכנס מילה או ביטוי לחיפוש');
+                }
+            };
+            
+            document.getElementById('closeLocationModal').onclick = function() {
+                modal.style.display = 'none';
+            };
+            
+            // Close modal when clicking outside
+            modal.onclick = function(event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            };
+            
+            // Add enter key handler for the input field
+            document.getElementById('locationSearchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const searchTerm = this.value.trim();
+                    if (searchTerm) {
+                        performContextSearch(searchTerm, 'verse', book, chapter, verse);
+                        modal.style.display = 'none';
+                    } else {
+                        alert('אנא הכנס מילה או ביטוי לחיפוש');
+                    }
+                }
+            });
         }
     </script>
 </body>
