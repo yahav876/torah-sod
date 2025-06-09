@@ -326,6 +326,10 @@ class SearchService:
         results = []
         book = chapter = None
         
+        # Get the length of the input phrase (without spaces)
+        input_word_length = len(input_phrase.replace(' ', ''))
+        special_prefixes = ['ל', 'ו', 'מ']
+        
         for line in batch_lines:
             line = line.strip()
             
@@ -350,10 +354,29 @@ class SearchService:
                     start_index = end_index - len(variant) + 1
                     matched_text = clean_verse[start_index:end_index + 1]
                     
+                    # Apply the special rule for words in memory search
                     if matched_text == variant and variant != input_phrase:
-                        if variant in full_text:
-                            marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
-                            results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
-                            break
+                        # Determine if this is a memory search by checking the source tuple
+                        is_memory_search = any('memory' in str(s) for s in source)
+                        
+                        if is_memory_search:
+                            # If the variant has exactly the same number of letters as the input phrase, include it
+                            if len(variant) == input_word_length:
+                                if variant in full_text:
+                                    marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
+                                    results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
+                                    break
+                            # If the variant starts with one of the special prefixes and has more letters than the input phrase
+                            elif len(variant) > input_word_length and any(variant.startswith(prefix) for prefix in special_prefixes):
+                                if variant in full_text:
+                                    marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
+                                    results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
+                                    break
+                        else:
+                            # Original behavior for indexed search
+                            if variant in full_text:
+                                marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
+                                results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
+                                break
         
         return results
