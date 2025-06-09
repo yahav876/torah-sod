@@ -1163,9 +1163,9 @@ def get_main_template():
                         ${location.book} פרק ${location.chapter}, פסוק ${location.verse}
                     </div>`;
                     
-                    // Make highlighted words clickable for context search
+                    // Make highlighted words NOT clickable as requested
                     const highlightedText = location.text.replace(/\[([^\]]+)\]/g, 
-                        `<span class="highlight clickable-variant" ${locationData} data-variant="$1">$1</span>`);
+                        `<span class="highlight">$1</span>`);
                     
                     html += '<div class="verse-text">' + highlightedText + '</div>';
                     html += '</div>';
@@ -1400,25 +1400,19 @@ def get_main_template():
             // Set the search input to the variant text
             document.getElementById('searchInput').value = variantText;
             
-            // Construct the search query based on context type
-            let searchQuery = variantText;
+            // Log the search parameters
+            console.log("Context search parameters:", {
+                variantText,
+                contextType,
+                book,
+                chapter,
+                verse
+            });
             
-            // If we have location data, add context filters
-            if (book && chapter) {
-                if (contextType === 'verse' && verse) {
-                    // Search in specific verse
-                    searchQuery = `${variantText} book:${book} chapter:${chapter} verse:${verse}`;
-                } else if (contextType === 'chapter') {
-                    // Search in specific chapter
-                    searchQuery = `${variantText} book:${book} chapter:${chapter}`;
-                }
-            }
-            
-            // Log the search query
-            console.log("Performing context search:", searchQuery);
+            // For now, just search for the variant text without filters
+            // This is a temporary fix until the backend supports filtering by book/chapter/verse
             
             // Execute the search
-            document.getElementById('searchInput').value = searchQuery;
             search();
         }
         
