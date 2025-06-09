@@ -21,7 +21,7 @@ services:
     environment:
       - FLASK_ENV=${FLASK_ENV:-production}
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL="sqlite:///:memory:"
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
@@ -54,7 +54,7 @@ services:
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=16
     environment:
       - FLASK_ENV=${FLASK_ENV:-production}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL="sqlite:///:memory:"
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0

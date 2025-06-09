@@ -60,7 +60,7 @@ class TorahWord(db.Model):
     __table_args__ = (
         Index('idx_word_normalized_verse', 'word_normalized', 'verse_id'),
         Index('idx_verse_position', 'verse_id', 'word_position'),
-        Index('idx_normalized_prefix', db.text('word_normalized varchar_pattern_ops')),  # For LIKE queries
+        # Removed PostgreSQL-specific index
         Index('idx_word_search_combo', 'word_normalized', 'verse_id', 'word_position'),
     )
     
