@@ -346,6 +346,84 @@ def get_main_template():
             font-style: italic;
         }
         
+        .clickable-variant {
+            cursor: pointer;
+            text-decoration: underline;
+            color: #3498db;
+        }
+        
+        .clickable-variant:hover {
+            color: #2980b9;
+            text-decoration: underline;
+        }
+        
+        .search-context-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .search-context-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        
+        .search-context-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        
+        .search-context-options {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .search-context-option {
+            padding: 10px 15px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        
+        .search-context-option:hover {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        .search-context-close {
+            padding: 8px 15px;
+            background-color: #95a5a6;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .search-context-close:hover {
+            background-color: #7f8c8d;
+        }
+        
         .locations-container {
             overflow: hidden;
             transition: max-height 0.3s ease-out;
@@ -479,6 +557,19 @@ def get_main_template():
             </div>
             
             <div id="results"></div>
+        </div>
+    </div>
+    
+    <!-- Search Context Modal -->
+    <div id="searchContextModal" class="search-context-modal">
+        <div class="search-context-content">
+            <div class="search-context-title">חיפוש נוסף עבור: <span id="contextVariantText"></span></div>
+            <div>בחר את ההקשר לחיפוש:</div>
+            <div class="search-context-options">
+                <button id="searchInVerse" class="search-context-option">חפש בפסוק</button>
+                <button id="searchInChapter" class="search-context-option">חפש בפרק</button>
+            </div>
+            <button id="closeContextModal" class="search-context-close">סגור</button>
         </div>
     </div>
 
@@ -1026,8 +1117,8 @@ def get_main_template():
                 html += '<div class="variant-row"><div class="variant-cell">מילה מקורית:</div><div class="variant-cell">' + searchTerm + '</div></div>';
                 // Row 2: Sources
                 html += '<div class="variant-row"><div class="variant-cell">מקורות:</div><div class="variant-cell">' + result.sources.join(', ') + '</div></div>';
-                // Row 3: Variant
-                html += '<div class="variant-row"><div class="variant-cell">וריאציה:</div><div class="variant-cell">' + result.variant + '</div></div>';
+                // Row 3: Variant - make it clickable
+                html += '<div class="variant-row"><div class="variant-cell">וריאציה:</div><div class="variant-cell"><span class="clickable-variant" data-variant="' + result.variant + '" data-sources="' + result.sources.join(',') + '">' + result.variant + '</span></div></div>';
                 html += '</div>'; // End variant-table
                 
                 html += '</div>'; // End variant-header
@@ -1035,10 +1126,19 @@ def get_main_template():
                 // Collapsible locations container
                 html += '<div id="' + resultId + '" class="locations-container">';
                 
-                result.locations.forEach(location => {
-                    html += '<div class="location">';
+                result.locations.forEach((location, locIndex) => {
+                    const locationId = `${resultId}-loc-${locIndex}`;
+                    html += '<div class="location" id="' + locationId + '">';
                     html += '<div class="location-header">' + location.book + ' פרק ' + location.chapter + ', פסוק ' + location.verse + '</div>';
-                    html += '<div class="verse-text">' + location.text.replace(/\[([^\]]+)\]/g, '<span class="highlight">$1</span>') + '</div>';
+                    
+                    // Store location data as attributes for context search
+                    const locationData = `data-book="${location.book}" data-chapter="${location.chapter}" data-verse="${location.verse}"`;
+                    
+                    // Make highlighted words clickable for context search
+                    const highlightedText = location.text.replace(/\[([^\]]+)\]/g, 
+                        `<span class="highlight clickable-variant" ${locationData} data-variant="$1">$1</span>`);
+                    
+                    html += '<div class="verse-text">' + highlightedText + '</div>';
                     html += '</div>';
                 });
                 
@@ -1075,6 +1175,25 @@ def get_main_template():
             
             // Show the expand/collapse all buttons
             document.getElementById('resultsControls').style.display = 'block';
+            
+            // Add click event listeners to all clickable variants
+            document.querySelectorAll('.clickable-variant').forEach(variant => {
+                variant.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent triggering the variant header click
+                    
+                    // Get variant data
+                    const variantText = this.getAttribute('data-variant');
+                    const sources = this.getAttribute('data-sources');
+                    
+                    // Get location data if available
+                    const book = this.getAttribute('data-book');
+                    const chapter = this.getAttribute('data-chapter');
+                    const verse = this.getAttribute('data-verse');
+                    
+                    // Show context search modal
+                    showSearchContextModal(variantText, sources, book, chapter, verse);
+                });
+            });
         }
         
         // Function to toggle variant expansion/collapse
@@ -1167,6 +1286,87 @@ def get_main_template():
                 console.error('Error clearing cache:', error);
                 alert('שגיאה בניקוי המטמון: ' + error.message);
             }
+        }
+        
+        // Function to show the search context modal
+        function showSearchContextModal(variantText, sources, book, chapter, verse) {
+            // Set the variant text in the modal
+            document.getElementById('contextVariantText').textContent = variantText;
+            
+            // Create modal if it doesn't exist
+            let modal = document.getElementById('searchContextModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'searchContextModal';
+                modal.className = 'search-context-modal';
+                
+                const content = `
+                    <div class="search-context-content">
+                        <div class="search-context-title">חיפוש נוסף עבור: <span id="contextVariantText">${variantText}</span></div>
+                        <div>בחר את ההקשר לחיפוש:</div>
+                        <div class="search-context-options">
+                            <button id="searchInVerse" class="search-context-option">חפש בפסוק</button>
+                            <button id="searchInChapter" class="search-context-option">חפש בפרק</button>
+                        </div>
+                        <button id="closeContextModal" class="search-context-close">סגור</button>
+                    </div>
+                `;
+                
+                modal.innerHTML = content;
+                document.body.appendChild(modal);
+            }
+            
+            // Display the modal
+            modal.style.display = 'flex';
+            
+            // Set up event listeners for the modal buttons
+            document.getElementById('searchInVerse').onclick = function() {
+                performContextSearch(variantText, 'verse', book, chapter, verse);
+                modal.style.display = 'none';
+            };
+            
+            document.getElementById('searchInChapter').onclick = function() {
+                performContextSearch(variantText, 'chapter', book, chapter, verse);
+                modal.style.display = 'none';
+            };
+            
+            document.getElementById('closeContextModal').onclick = function() {
+                modal.style.display = 'none';
+            };
+            
+            // Close modal when clicking outside
+            modal.onclick = function(event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            };
+        }
+        
+        // Function to perform context search
+        function performContextSearch(variantText, contextType, book, chapter, verse) {
+            // Set the search input to the variant text
+            document.getElementById('searchInput').value = variantText;
+            
+            // Construct the search query based on context type
+            let searchQuery = variantText;
+            
+            // If we have location data, add context filters
+            if (book && chapter) {
+                if (contextType === 'verse' && verse) {
+                    // Search in specific verse
+                    searchQuery = `${variantText} book:${book} chapter:${chapter} verse:${verse}`;
+                } else if (contextType === 'chapter') {
+                    // Search in specific chapter
+                    searchQuery = `${variantText} book:${book} chapter:${chapter}`;
+                }
+            }
+            
+            // Log the search query
+            console.log("Performing context search:", searchQuery);
+            
+            // Execute the search
+            document.getElementById('searchInput').value = searchQuery;
+            search();
         }
     </script>
 </body>
