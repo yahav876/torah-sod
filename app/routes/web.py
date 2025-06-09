@@ -339,7 +339,7 @@ def get_main_template():
         
         .verse-text {
             line-height: 1.6;
-            font-size: 16px;
+            font-size: 12px; /* Reduced by 25% from 16px */
         }
         
         .highlight {
@@ -994,11 +994,20 @@ def get_main_template():
             
             resultsDiv.innerHTML = html;
             
-            // Initialize all location containers with proper height
+            // Initialize all location containers as collapsed by default
             data.results.forEach((result, index) => {
                 const container = document.getElementById('result-' + index);
                 if (container) {
-                    container.style.maxHeight = container.scrollHeight + 'px';
+                    // Add collapsed class
+                    container.classList.add('collapsed');
+                    container.style.maxHeight = '0';
+                    
+                    // Update toggle icon
+                    const toggle = document.querySelector(`[data-result-id="result-${index}"] .variant-toggle`);
+                    if (toggle) {
+                        toggle.classList.add('collapsed');
+                        toggle.textContent = '◀';
+                    }
                 }
             });
             
