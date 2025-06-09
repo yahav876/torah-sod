@@ -308,6 +308,38 @@ def get_main_template():
             transform: rotate(-90deg);
         }
         
+        .variant-table {
+            flex: 1;
+            margin-right: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .variant-row {
+            display: flex;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .variant-row:last-child {
+            border-bottom: none;
+        }
+        
+        .variant-cell {
+            padding: 8px 12px;
+        }
+        
+        .variant-cell:first-child {
+            width: 120px;
+            background-color: #f5f5f5;
+            font-weight: bold;
+            border-left: 1px solid #e0e0e0;
+        }
+        
+        .variant-cell:last-child {
+            flex: 1;
+        }
+        
         .sources {
             color: #7f8c8d;
             margin-bottom: 15px;
@@ -921,9 +953,16 @@ def get_main_template():
                 // Display all partial results with real-time updates
                 partialResults.forEach((result, index) => {
                     html += `<div class="partial-result-item">`;
-                    html += `<div class="variant">${searchTerm} ➜ ${result.variant}</div>`;
-                    html += `<div style="text-align: center; margin: 5px 0; font-weight: bold;">${result.variant}</div>`;
-                    html += `<div class="sources">מקורות: ${result.sources.join(', ')}</div>`;
+                    
+                    // Create a table-like structure with 3 rows
+                    html += `<div class="variant-table">`;
+                    // Row 1: Original search term
+                    html += `<div class="variant-row"><div class="variant-cell">מילה מקורית:</div><div class="variant-cell">${searchTerm}</div></div>`;
+                    // Row 2: Sources
+                    html += `<div class="variant-row"><div class="variant-cell">מקורות:</div><div class="variant-cell">${result.sources.join(', ')}</div></div>`;
+                    // Row 3: Variant
+                    html += `<div class="variant-row"><div class="variant-cell">וריאציה:</div><div class="variant-cell">${result.variant}</div></div>`;
+                    html += `</div>`; // End variant-table
                     
                     // Add a sample location if available
                     if (result.locations && result.locations.length > 0) {
@@ -979,14 +1018,19 @@ def get_main_template():
                 
                 // Collapsible variant header
                 html += '<div class="variant-header" data-result-id="' + resultId + '">';
-                html += '<div class="variant">' + searchTerm + ' ➜ ' + result.variant + '</div>';
                 html += '<div class="variant-toggle">▼</div>';
-                html += '</div>';
                 
-                // Show variant between search term and sources
-                html += '<div style="text-align: center; margin: 5px 0; font-weight: bold;">' + result.variant + '</div>';
+                // Create a table-like structure with 3 rows
+                html += '<div class="variant-table">';
+                // Row 1: Original search term
+                html += '<div class="variant-row"><div class="variant-cell">מילה מקורית:</div><div class="variant-cell">' + searchTerm + '</div></div>';
+                // Row 2: Sources
+                html += '<div class="variant-row"><div class="variant-cell">מקורות:</div><div class="variant-cell">' + result.sources.join(', ') + '</div></div>';
+                // Row 3: Variant
+                html += '<div class="variant-row"><div class="variant-cell">וריאציה:</div><div class="variant-cell">' + result.variant + '</div></div>';
+                html += '</div>'; // End variant-table
                 
-                html += '<div class="sources">מקורות: ' + result.sources.join(', ') + '</div>';
+                html += '</div>'; // End variant-header
                 
                 // Collapsible locations container
                 html += '<div id="' + resultId + '" class="locations-container">';

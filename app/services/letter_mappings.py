@@ -103,7 +103,7 @@ class LetterMappings:
         results.extend(self.get_grouped_mapped(ch, self.abgd_map_8, "אהוי"))
         
         # Original character
-        results.append((ch, "Original"))
+        results.append((ch, "מקור"))
         
         return list(set(results))
     
@@ -113,7 +113,7 @@ class LetterMappings:
         
         for ch in phrase:
             if ch == ' ':
-                letter_options.append([(' ', 'Original')])
+                letter_options.append([(' ', 'מקור')])
             else:
                 letter_options.append(self.get_possible_conversions(ch))
         
