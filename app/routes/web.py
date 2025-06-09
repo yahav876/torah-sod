@@ -1397,9 +1397,6 @@ def get_main_template():
         
         // Function to perform context search
         function performContextSearch(variantText, contextType, book, chapter, verse) {
-            // Set the search input to the variant text
-            document.getElementById('searchInput').value = variantText;
-            
             // Log the search parameters
             console.log("Context search parameters:", {
                 variantText,
@@ -1409,8 +1406,17 @@ def get_main_template():
                 verse
             });
             
-            // For now, just search for the variant text without filters
-            // This is a temporary fix until the backend supports filtering by book/chapter/verse
+            // Construct the search query based on context type
+            if (contextType === 'verse' && verse) {
+                // Search in specific verse
+                document.getElementById('searchInput').value = `${variantText} book:${book} chapter:${chapter} verse:${verse}`;
+            } else if (contextType === 'chapter') {
+                // Search in specific chapter
+                document.getElementById('searchInput').value = `${variantText} book:${book} chapter:${chapter}`;
+            } else {
+                // Just search for the variant text
+                document.getElementById('searchInput').value = variantText;
+            }
             
             // Execute the search
             search();

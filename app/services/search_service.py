@@ -35,7 +35,8 @@ class SearchService:
             self.executor.shutdown(wait=True)
     
     @track_search_metrics('web')
-    def search(self, phrase, use_cache=True, partial_results_callback=None, is_memory_search=False):
+    def search(self, phrase, use_cache=True, partial_results_callback=None, is_memory_search=False, 
+              filter_book=None, filter_chapter=None, filter_verse=None):
         """Perform search with caching and metrics."""
         try:
             # Validate input
@@ -49,19 +50,71 @@ class SearchService:
             # Track phrase length
             search_phrase_length.observe(len(phrase))
             
-            # Check cache
-            if use_cache:
-                cached_result = self.torah_service.get_cached_result(phrase)
+            # Extract filters from phrase if they exist
+            # Format: "search_term book:Book chapter:X verse:Y"
+            filters = {}
+            words = phrase.split()
+            filtered_phrase = []
+            
+            for word in words:
+                if word.startswith('book:'):
+                    filters['book'] = word[5:]
+                elif word.startswith('chapter:'):
+                    filters['chapter'] = word[8:]
+                elif word.startswith('verse:'):
+                    filters['verse'] = word[6:]
+                else:
+                    filtered_phrase.append(word)
+            
+            # Use provided filters if not extracted from phrase
+            if filter_book and 'book' not in filters:
+                filters['book'] = filter_book
+            if filter_chapter and 'chapter' not in filters:
+                filters['chapter'] = filter_chapter
+            if filter_verse and 'verse' not in filters:
+                filters['verse'] = filter_verse
+            
+            # Use the filtered phrase for search
+            clean_phrase = ' '.join(filtered_phrase)
+            
+            # Log search parameters
+            logger.info("search_with_filters", 
+                       original_phrase=phrase,
+                       clean_phrase=clean_phrase,
+                       filters=filters,
+                       is_memory_search=is_memory_search)
+            
+            # Check cache only if no filters
+            if use_cache and not filters:
+                cached_result = self.torah_service.get_cached_result(clean_phrase)
                 if cached_result:
-                    logger.info("cache_hit", phrase=phrase)
+                    logger.info("cache_hit", phrase=clean_phrase)
                     return cached_result
             
             # Log that we're using the memory search approach
-            logger.info("using_memory_search", phrase=phrase, is_memory_search=is_memory_search)
+            logger.info("using_memory_search", phrase=clean_phrase, is_memory_search=is_memory_search)
             
             # Perform search
             start_time = time.time()
-            results = self._perform_search(phrase, partial_results_callback, is_memory_search=is_memory_search)
+            results = self._perform_search(clean_phrase, partial_results_callback, is_memory_search=is_memory_search)
+            
+            # Apply filters if any
+            if filters:
+                filtered_results = self._apply_filters(results, filters)
+                search_time = time.time() - start_time
+                
+                # Format response with filtered results
+                response = {
+                    'input_phrase': phrase,
+                    'clean_phrase': clean_phrase,
+                    'filters': filters,
+                    'results': filtered_results['results'],
+                    'total_variants': filtered_results['total_variants'],
+                    'search_time': round(search_time, 3),
+                    'success': True
+                }
+                
+                return response
             search_time = time.time() - start_time
             
             # Format response
@@ -595,6 +648,67 @@ class SearchService:
                         logger.error("multi_word_batch_search_error", batch=batch_idx, error=str(e), exc_info=True)
         
         return grouped_matches
+    
+    def _apply_filters(self, results, filters):
+        """
+        Apply filters to search results.
+        
+        Args:
+            results: Dictionary with 'results' and 'total_variants' keys
+            filters: Dictionary with optional 'book', 'chapter', and 'verse' keys
+            
+        Returns:
+            Dictionary with filtered results
+        """
+        filtered_results = []
+        
+        # Log the filters being applied
+        logger.info("applying_filters", filters=filters)
+        
+        # Extract filters
+        filter_book = filters.get('book')
+        filter_chapter = filters.get('chapter')
+        filter_verse = filters.get('verse')
+        
+        # Apply filters to each result
+        for result in results['results']:
+            # Filter locations
+            filtered_locations = []
+            
+            for location in result['locations']:
+                # Check if location matches all provided filters
+                matches = True
+                
+                if filter_book and location['book'] != filter_book:
+                    matches = False
+                
+                if filter_chapter and location['chapter'] != filter_chapter:
+                    matches = False
+                
+                if filter_verse and location['verse'] != filter_verse:
+                    matches = False
+                
+                if matches:
+                    filtered_locations.append(location)
+            
+            # If there are any matching locations, include this result
+            if filtered_locations:
+                filtered_result = {
+                    'variant': result['variant'],
+                    'sources': result['sources'],
+                    'locations': filtered_locations
+                }
+                filtered_results.append(filtered_result)
+        
+        # Log the filtering results
+        logger.info("filter_results", 
+                   original_count=len(results['results']),
+                   filtered_count=len(filtered_results))
+        
+        return {
+            'results': filtered_results,
+            'total_variants': len(filtered_results)
+        }
     
     def _search_batch_multi_word(self, batch_lines, word_variants, input_phrase, full_text, is_memory_search=False):
         """
