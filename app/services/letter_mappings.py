@@ -64,10 +64,10 @@ class LetterMappings:
         self.final_to_regular = {'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ'}
         
         self.maps = [
-            ("Map 1", self.abgd_map_1),
-            ("Map 2", self.abgd_map_2),
-            ("Map 3", self.abgd_map_3),
-            ("Map 4", self.abgd_map_4)
+            ("אב״גד", self.abgd_map_1),
+            ("את״בש", self.abgd_map_2),
+            ("אל״במ", self.abgd_map_3),
+            ("את״בח", self.abgd_map_4)
         ]
     
     def get_grouped_mapped(self, ch: str, map_group: List[List[str]], label: str, 
@@ -94,13 +94,13 @@ class LetterMappings:
         
         # Map 4
         if ch in self.abgd_map_4:
-            results.append((self.abgd_map_4[ch], "Map 4"))
+            results.append((self.abgd_map_4[ch], "את״בח"))
         
         # Maps 5-8
-        results.extend(self.get_grouped_mapped(ch, self.abgd_map_5, "Map 5"))
-        results.extend(self.get_grouped_mapped(ch, self.abgd_map_6, "Map 6"))
-        results.extend(self.get_grouped_mapped(ch, self.abgd_map_7, "Map 7", apply_normalization=True))
-        results.extend(self.get_grouped_mapped(ch, self.abgd_map_8, "Map 8"))
+        results.extend(self.get_grouped_mapped(ch, self.abgd_map_5, "איק-בכר"))
+        results.extend(self.get_grouped_mapped(ch, self.abgd_map_6, "אחס-בטע"))
+        results.extend(self.get_grouped_mapped(ch, self.abgd_map_7, "מוצאות-הפה", apply_normalization=True))
+        results.extend(self.get_grouped_mapped(ch, self.abgd_map_8, "אהוי"))
         
         # Original character
         results.append((ch, "Original"))

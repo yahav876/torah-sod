@@ -915,10 +915,14 @@ def get_main_template():
                     תוצאות חלקיות שנמצאו עד כה: ${partialResults.length} (החיפוש עדיין מתבצע)
                 </div>`;
                 
+                // Get the original search term from the input field
+                const searchTerm = document.getElementById('searchInput').value.trim();
+                
                 // Display all partial results with real-time updates
                 partialResults.forEach((result, index) => {
                     html += `<div class="partial-result-item">`;
-                    html += `<div class="variant">${result.variant}</div>`;
+                    html += `<div class="variant">${searchTerm} ➜ ${result.variant}</div>`;
+                    html += `<div style="text-align: center; margin: 5px 0; font-weight: bold;">${result.variant}</div>`;
                     html += `<div class="sources">מקורות: ${result.sources.join(', ')}</div>`;
                     
                     // Add a sample location if available
@@ -966,15 +970,21 @@ def get_main_template():
             html += 'זמן חיפוש: ' + data.search_time + ' שניות';
             html += '</div>';
             
+            // Get the original search term
+            const searchTerm = data.input_phrase;
+            
             data.results.forEach((result, index) => {
                 const resultId = 'result-' + index;
                 html += '<div class="result-item">';
                 
                 // Collapsible variant header
                 html += '<div class="variant-header" data-result-id="' + resultId + '">';
-                html += '<div class="variant">' + result.variant + '</div>';
+                html += '<div class="variant">' + searchTerm + ' ➜ ' + result.variant + '</div>';
                 html += '<div class="variant-toggle">▼</div>';
                 html += '</div>';
+                
+                // Show variant between search term and sources
+                html += '<div style="text-align: center; margin: 5px 0; font-weight: bold;">' + result.variant + '</div>';
                 
                 html += '<div class="sources">מקורות: ' + result.sources.join(', ') + '</div>';
                 
