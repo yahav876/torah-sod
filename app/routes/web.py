@@ -534,13 +534,7 @@ def get_main_template():
             </div>
             
             <div class="search-options">
-                <div class="toggle-container">
-                    <div id="indexedOption" class="toggle-option active">חיפוש מאגר נתונים</div>
-                    <div id="memoryOption" class="toggle-option">חיפוש בזיכרון</div>
-                </div>
-                <div class="toggle-help">
-                    לחץ על אחת האפשרויות כדי לבחור שיטת חיפוש - האפשרות הכחולה היא הנבחרת
-                </div>
+                <!-- Search options removed - using only in-memory search -->
                 
                 <div class="admin-options">
                     <div style="margin-bottom: 10px; font-weight: bold;">ניהול מערכת</div>
@@ -636,7 +630,7 @@ def get_main_template():
 
     <script>
         let isSearching = false;
-        let searchType = 'indexed'; // Default search type
+        let searchType = 'memory'; // Always use memory search
         let searchJobId = null;
         let progressInterval = null;
         let partialResults = [];
@@ -651,14 +645,7 @@ def get_main_template():
                 search();
             });
             
-            // Set up search type toggle handlers
-            document.getElementById('indexedOption').addEventListener('click', function() {
-                setSearchType('indexed');
-            });
-            
-            document.getElementById('memoryOption').addEventListener('click', function() {
-                setSearchType('memory');
-            });
+            // Search type toggle handlers removed - using only in-memory search
             
             // Set up clear cache button handler
             document.getElementById('clearCacheBtn').addEventListener('click', function() {
@@ -687,19 +674,7 @@ def get_main_template():
             });
         });
         
-        // Set up search type toggle
-        function setSearchType(type) {
-            searchType = type;
-            
-            // Update UI
-            if (type === 'indexed') {
-                document.getElementById('indexedOption').classList.add('active');
-                document.getElementById('memoryOption').classList.remove('active');
-            } else {
-                document.getElementById('indexedOption').classList.remove('active');
-                document.getElementById('memoryOption').classList.add('active');
-            }
-        }
+        // Search type toggle function removed - using only in-memory search
         
         
         async function search() {

@@ -55,17 +55,10 @@ def perform_background_search(self, job_id, phrase, search_type='indexed'):
                 except Exception as e:
                     logger.error("redis_partial_results_error", error=str(e))
         
-        # Perform search based on type with partial results callback
-        if search_type == 'memory':
-            # Use in-memory search
-            with SearchService() as service:
-                # Disable cache for background searches and explicitly set is_memory_search=True
-                result = service.search(phrase, use_cache=False, partial_results_callback=collect_partial_results, is_memory_search=True)
-        else:
-            # Use indexed search
-            from app.services.indexed_search_service import IndexedSearchService
-            search_service = IndexedSearchService()
-            result = search_service.search(phrase, use_cache=False, partial_results_callback=collect_partial_results)
+        # Always use in-memory search
+        with SearchService() as service:
+            # Disable cache for background searches and explicitly set is_memory_search=True
+            result = service.search(phrase, use_cache=False, partial_results_callback=collect_partial_results, is_memory_search=True)
         
         # Update progress
         current_task.update_state(

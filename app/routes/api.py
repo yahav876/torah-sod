@@ -41,8 +41,8 @@ def search():
                 'success': False
             }), 400
         
-        # Get search type (default to indexed)
-        search_type = data.get('search_type', 'indexed')
+        # Always use in-memory search
+        search_type = 'memory'
         
         # Log search request
         logger.info("search_request", phrase=phrase, type=search_type, ip=get_remote_address())
@@ -72,17 +72,10 @@ def search():
                 'success': True
             }), 202
         
-        # Choose search service based on type
-        if search_type == 'memory':
-            # Use in-memory search
-            with SearchService() as search_service:
-                # Explicitly set is_memory_search=True for memory search
-                result = search_service.search(phrase, is_memory_search=True)
-        else:
-            # Use indexed search (default) - direct execution, no background task
-            from app.services.indexed_search_service import IndexedSearchService
-            search_service = IndexedSearchService()
-            result = search_service.search(phrase)
+        # Use in-memory search
+        with SearchService() as search_service:
+            # Explicitly set is_memory_search=True for memory search
+            result = search_service.search(phrase, is_memory_search=True)
         
         # Record statistics
         try:
@@ -159,14 +152,9 @@ def search_stream():
                 try:
                     # Create application context for the thread
                     with app.app_context():
-                        # Choose search service based on type
-                        if search_type == 'memory':
-                            with SearchService() as search_service:
-                                final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback, is_memory_search=True)
-                        else:
-                            from app.services.indexed_search_service import IndexedSearchService
-                            search_service = IndexedSearchService()
-                            final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                        # Always use in-memory search
+                        with SearchService() as search_service:
+                            final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback, is_memory_search=True)
                 except Exception as e:
                     logger.error("search_worker_error", error=str(e))
                     final_result = {'error': str(e), 'success': False}
@@ -315,14 +303,9 @@ def search_live():
                     # Log that we're in app context
                     logger.info("search_worker_started", phrase=phrase, search_type=search_type)
                     
-                    # Perform search
-                    if search_type == 'memory':
-                        with SearchService() as search_service:
-                            final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback, is_memory_search=True)
-                    else:
-                        from app.services.indexed_search_service import IndexedSearchService
-                        search_service = IndexedSearchService()
-                        final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                    # Always use in-memory search
+                    with SearchService() as search_service:
+                        final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback, is_memory_search=True)
                 
                 # Store final result
                 final_state = {
