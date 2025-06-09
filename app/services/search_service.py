@@ -35,7 +35,7 @@ class SearchService:
             self.executor.shutdown(wait=True)
     
     @track_search_metrics('web')
-    def search(self, phrase, use_cache=True, partial_results_callback=None):
+    def search(self, phrase, use_cache=True, partial_results_callback=None, is_memory_search=False):
         """Perform search with caching and metrics."""
         try:
             # Validate input
@@ -56,9 +56,12 @@ class SearchService:
                     logger.info("cache_hit", phrase=phrase)
                     return cached_result
             
+            # Log that we're using the memory search approach
+            logger.info("using_memory_search", phrase=phrase, is_memory_search=is_memory_search)
+            
             # Perform search
             start_time = time.time()
-            results = self._perform_search(phrase, partial_results_callback)
+            results = self._perform_search(phrase, partial_results_callback, is_memory_search=is_memory_search)
             search_time = time.time() - start_time
             
             # Format response
@@ -84,7 +87,7 @@ class SearchService:
                 'results': []
             }
     
-    def _perform_search(self, phrase, partial_results_callback=None):
+    def _perform_search(self, phrase, partial_results_callback=None, is_memory_search=False):
         """Perform the actual search."""
         # Get Torah text
         lines = self.torah_service.get_torah_lines()
@@ -97,9 +100,17 @@ class SearchService:
         variant_tuples = self.letter_mappings.generate_all_variants(phrase)
         automaton = self._build_automaton(variant_tuples)
         
+        # Log the search parameters
+        logger.info("search_parameters", 
+                   phrase=phrase, 
+                   phrase_length=len(phrase.replace(' ', '')),
+                   is_memory_search=is_memory_search,
+                   variant_count=len(variant_tuples))
+        
         # Perform parallel search
         grouped_matches = self._search_parallel(
-            automaton, lines, len(phrase.replace(' ', '')), phrase, full_text, partial_results_callback
+            automaton, lines, len(phrase.replace(' ', '')), phrase, full_text, 
+            partial_results_callback, is_memory_search
         )
         
         # Format results
@@ -132,7 +143,8 @@ class SearchService:
         automaton.make_automaton()
         return automaton
     
-    def _search_parallel(self, automaton, lines, phrase_length, input_phrase, full_text, partial_results_callback=None):
+    def _search_parallel(self, automaton, lines, phrase_length, input_phrase, full_text, 
+                        partial_results_callback=None, is_memory_search=False):
         """Perform parallel search across Torah text with AWS optimization."""
         grouped_matches = defaultdict(list)
         
@@ -143,11 +155,13 @@ class SearchService:
         logger.info("search_parallelization_method", 
                    use_book_parallel=use_book_parallel, 
                    max_workers=current_app.config.get('MAX_WORKERS', 4),
-                   input_phrase=input_phrase)
+                   input_phrase=input_phrase,
+                   is_memory_search=is_memory_search)
         
         if use_book_parallel:
             # Use book-based parallelization
-            return self._search_parallel_by_books(automaton, lines, phrase_length, input_phrase, full_text, partial_results_callback)
+            return self._search_parallel_by_books(automaton, lines, phrase_length, input_phrase, 
+                                                full_text, partial_results_callback, is_memory_search)
         
         # Original line-based parallelization
         num_workers = current_app.config['MAX_WORKERS']  # Use full worker capacity
@@ -161,7 +175,7 @@ class SearchService:
             future_to_batch = {
                 executor.submit(
                     self._search_batch,
-                    batch, automaton, phrase_length, input_phrase, full_text
+                    batch, automaton, phrase_length, input_phrase, full_text, is_memory_search
                 ): batch_idx
                 for batch_idx, batch in enumerate(batches)
             }
@@ -199,7 +213,8 @@ class SearchService:
         
         return grouped_matches
     
-    def _search_parallel_by_books(self, automaton, lines, phrase_length, input_phrase, full_text, partial_results_callback=None):
+    def _search_parallel_by_books(self, automaton, lines, phrase_length, input_phrase, full_text, 
+                                partial_results_callback=None, is_memory_search=False):
         """Perform parallel search across Torah text by dividing work by books."""
         grouped_matches = defaultdict(list)
         
@@ -220,7 +235,7 @@ class SearchService:
             future_to_book = {
                 executor.submit(
                     self._search_batch,
-                    book_lines[book], automaton, phrase_length, input_phrase, full_text
+                    book_lines[book], automaton, phrase_length, input_phrase, full_text, is_memory_search
                 ): book
                 for book in book_lines
             }
@@ -321,7 +336,7 @@ class SearchService:
         
         return book_lines
     
-    def _search_batch(self, batch_lines, automaton, phrase_length, input_phrase, full_text):
+    def _search_batch(self, batch_lines, automaton, phrase_length, input_phrase, full_text, is_memory_search=False):
         """Search for patterns in a batch of lines."""
         results = []
         book = chapter = None
@@ -329,6 +344,12 @@ class SearchService:
         # Get the length of the input phrase (without spaces)
         input_word_length = len(input_phrase.replace(' ', ''))
         special_prefixes = ['ל', 'ו', 'מ']
+        
+        # Log the search batch parameters
+        logger.info("search_batch", 
+                   input_phrase=input_phrase,
+                   input_word_length=input_word_length,
+                   is_memory_search=is_memory_search)
         
         for line in batch_lines:
             line = line.strip()
@@ -356,24 +377,36 @@ class SearchService:
                     
                     # Apply the special rule for words in memory search
                     if matched_text == variant and variant != input_phrase:
-                        # Determine if this is a memory search by checking the source tuple
-                        is_memory_search = any('memory' in str(s) for s in source)
+                        # Log for debugging
+                        logger.info("search_match_debug", 
+                                   variant=variant, 
+                                   variant_length=len(variant),
+                                   input_phrase=input_phrase,
+                                   input_word_length=input_word_length,
+                                   is_memory_search=is_memory_search,
+                                   source=str(source))
                         
                         if is_memory_search:
                             # If the variant has exactly the same number of letters as the input phrase, include it
                             if len(variant) == input_word_length:
+                                logger.info("match_exact_length", variant=variant)
                                 if variant in full_text:
                                     marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
                                     results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
                                     break
                             # If the variant starts with one of the special prefixes and has more letters than the input phrase
                             elif len(variant) > input_word_length and any(variant.startswith(prefix) for prefix in special_prefixes):
+                                prefix_match = next((p for p in special_prefixes if variant.startswith(p)), None)
+                                logger.info("match_prefix", variant=variant, prefix=prefix_match)
                                 if variant in full_text:
                                     marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
                                     results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
                                     break
+                            else:
+                                logger.info("skip_variant", variant=variant, reason="length_mismatch")
                         else:
                             # Original behavior for indexed search
+                            logger.info("indexed_search_match", variant=variant)
                             if variant in full_text:
                                 marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
                                 results.append((variant, tuple(source), book, chapter, verse_num, marked_text))

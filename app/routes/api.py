@@ -76,7 +76,8 @@ def search():
         if search_type == 'memory':
             # Use in-memory search
             with SearchService() as search_service:
-                result = search_service.search(phrase)
+                # Explicitly set is_memory_search=True for memory search
+                result = search_service.search(phrase, is_memory_search=True)
         else:
             # Use indexed search (default) - direct execution, no background task
             from app.services.indexed_search_service import IndexedSearchService
@@ -161,7 +162,7 @@ def search_stream():
                         # Choose search service based on type
                         if search_type == 'memory':
                             with SearchService() as search_service:
-                                final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                                final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback, is_memory_search=True)
                         else:
                             from app.services.indexed_search_service import IndexedSearchService
                             search_service = IndexedSearchService()
@@ -317,7 +318,7 @@ def search_live():
                     # Perform search
                     if search_type == 'memory':
                         with SearchService() as search_service:
-                            final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback)
+                            final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback, is_memory_search=True)
                     else:
                         from app.services.indexed_search_service import IndexedSearchService
                         search_service = IndexedSearchService()

@@ -59,8 +59,8 @@ def perform_background_search(self, job_id, phrase, search_type='indexed'):
         if search_type == 'memory':
             # Use in-memory search
             with SearchService() as service:
-                # Disable cache for background searches
-                result = service.search(phrase, use_cache=False, partial_results_callback=collect_partial_results)
+                # Disable cache for background searches and explicitly set is_memory_search=True
+                result = service.search(phrase, use_cache=False, partial_results_callback=collect_partial_results, is_memory_search=True)
         else:
             # Use indexed search
             from app.services.indexed_search_service import IndexedSearchService
