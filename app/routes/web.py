@@ -567,6 +567,40 @@ def get_main_template():
                 <button id="collapseAllBtn" class="control-btn">כווץ הכל</button>
             </div>
             
+            <!-- Filters Section -->
+            <div id="filtersSection" style="display: none; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                <div style="font-weight: bold; margin-bottom: 10px; font-size: 18px;">סינון תוצאות:</div>
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: center;">
+                    <!-- Book Filter -->
+                    <div style="min-width: 200px;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">סינון לפי ספר:</div>
+                        <select id="bookFilter" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
+                            <option value="all">כל הספרים</option>
+                            <option value="בראשית">בראשית</option>
+                            <option value="שמות">שמות</option>
+                            <option value="ויקרא">ויקרא</option>
+                            <option value="במדבר">במדבר</option>
+                            <option value="דברים">דברים</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Source Filter -->
+                    <div style="min-width: 200px;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">סינון לפי מקור:</div>
+                        <select id="sourceFilter" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
+                            <option value="all">כל המקורות</option>
+                            <!-- Will be populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px; text-align: center;">
+                    <button id="applyFiltersBtn" class="control-btn">החל סינון</button>
+                    <button id="resetFiltersBtn" class="control-btn" style="background-color: #95a5a6;">איפוס סינון</button>
+                </div>
+            </div>
+            
             <div id="results"></div>
         </div>
     </div>
@@ -1109,6 +1143,9 @@ def get_main_template():
             }
         }
         
+        // Store the original search results for filtering
+        let originalSearchResults = null;
+        
         function displayResults(data) {
             const resultsDiv = document.getElementById('results');
             
@@ -1121,6 +1158,25 @@ def get_main_template():
                 resultsDiv.innerHTML = '<div class="error">לא נמצאו תוצאות עבור: ' + data.input_phrase + '</div>';
                 return;
             }
+            
+            // Store the original results for filtering
+            originalSearchResults = data;
+            
+            // Collect all unique sources and books for filters
+            const allSources = new Set();
+            data.results.forEach(result => {
+                result.sources.forEach(source => allSources.add(source));
+            });
+            
+            // Populate the source filter dropdown
+            const sourceFilter = document.getElementById('sourceFilter');
+            sourceFilter.innerHTML = '<option value="all">כל המקורות</option>';
+            Array.from(allSources).sort().forEach(source => {
+                sourceFilter.innerHTML += `<option value="${source}">${source}</option>`;
+            });
+            
+            // Show the filters section
+            document.getElementById('filtersSection').style.display = 'block';
             
             let html = '<div class="stats">';
             html += '<strong>נמצאו ' + data.total_variants + ' וריאציות</strong><br>';
@@ -1247,6 +1303,10 @@ def get_main_template():
                     showLocationSearchModal(book, chapter, verse);
                 });
             });
+            
+            // Set up filter buttons
+            document.getElementById('applyFiltersBtn').addEventListener('click', applyFilters);
+            document.getElementById('resetFiltersBtn').addEventListener('click', resetFilters);
         }
         
         // Function to toggle variant expansion/collapse
@@ -1420,6 +1480,197 @@ def get_main_template():
             
             // Execute the search
             search();
+        }
+        
+        // Function to apply filters to search results
+        function applyFilters() {
+            if (!originalSearchResults) return;
+            
+            const bookFilter = document.getElementById('bookFilter').value;
+            const sourceFilter = document.getElementById('sourceFilter').value;
+            
+            console.log("Applying filters:", { bookFilter, sourceFilter });
+            
+            // Clone the original results
+            const filteredData = JSON.parse(JSON.stringify(originalSearchResults));
+            const filteredResults = [];
+            
+            // Apply filters to each result
+            for (const result of filteredData.results) {
+                // Filter by source
+                if (sourceFilter !== 'all' && !result.sources.includes(sourceFilter)) {
+                    continue;
+                }
+                
+                // Filter locations by book
+                if (bookFilter !== 'all') {
+                    const filteredLocations = result.locations.filter(location => 
+                        location.book === bookFilter
+                    );
+                    
+                    if (filteredLocations.length > 0) {
+                        // Update the result with filtered locations
+                        result.locations = filteredLocations;
+                        filteredResults.push(result);
+                    }
+                } else {
+                    // No book filter, include all locations
+                    filteredResults.push(result);
+                }
+            }
+            
+            // Update the filtered data
+            filteredData.results = filteredResults;
+            filteredData.total_variants = filteredResults.length;
+            
+            // Display the filtered results
+            renderResults(filteredData);
+            
+            // Update stats
+            const statsDiv = document.querySelector('.stats');
+            if (statsDiv) {
+                statsDiv.innerHTML = `<strong>נמצאו ${filteredResults.length} וריאציות</strong> (מתוך ${originalSearchResults.total_variants} סך הכל)<br>`;
+                statsDiv.innerHTML += `סינון: ${bookFilter === 'all' ? 'כל הספרים' : bookFilter}, ${sourceFilter === 'all' ? 'כל המקורות' : sourceFilter}`;
+            }
+        }
+        
+        // Function to reset filters
+        function resetFilters() {
+            document.getElementById('bookFilter').value = 'all';
+            document.getElementById('sourceFilter').value = 'all';
+            
+            if (originalSearchResults) {
+                renderResults(originalSearchResults);
+                
+                // Update stats
+                const statsDiv = document.querySelector('.stats');
+                if (statsDiv) {
+                    statsDiv.innerHTML = `<strong>נמצאו ${originalSearchResults.total_variants} וריאציות</strong><br>`;
+                    statsDiv.innerHTML += `זמן חיפוש: ${originalSearchResults.search_time} שניות`;
+                }
+            }
+        }
+        
+        // Function to render results (separated from displayResults for reuse)
+        function renderResults(data) {
+            const resultsDiv = document.getElementById('results');
+            
+            // Clear existing results except stats
+            const statsDiv = document.querySelector('.stats');
+            resultsDiv.innerHTML = '';
+            if (statsDiv) {
+                resultsDiv.appendChild(statsDiv);
+            }
+            
+            // Get the original search term
+            const searchTerm = data.input_phrase;
+            
+            data.results.forEach((result, index) => {
+                const resultId = 'result-' + index;
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-item';
+                
+                // Collapsible variant header
+                let html = '<div class="variant-header" data-result-id="' + resultId + '">';
+                html += '<div class="variant-toggle">▼</div>';
+                
+                // Create a table-like structure with 3 rows
+                html += '<div class="variant-table">';
+                // Row 1: Original search term
+                html += '<div class="variant-row"><div class="variant-cell">מילה מקורית:</div><div class="variant-cell">' + searchTerm + '</div></div>';
+                // Row 2: Sources
+                html += '<div class="variant-row"><div class="variant-cell">מקורות:</div><div class="variant-cell">' + result.sources.join(', ') + '</div></div>';
+                // Row 3: Variant - make it clickable
+                html += '<div class="variant-row"><div class="variant-cell">וריאציה:</div><div class="variant-cell"><span class="clickable-variant" data-variant="' + result.variant + '" data-sources="' + result.sources.join(',') + '">' + result.variant + '</span></div></div>';
+                html += '</div>'; // End variant-table
+                
+                html += '</div>'; // End variant-header
+                
+                // Collapsible locations container
+                html += '<div id="' + resultId + '" class="locations-container">';
+                
+                result.locations.forEach((location, locIndex) => {
+                    const locationId = `${resultId}-loc-${locIndex}`;
+                    html += '<div class="location" id="' + locationId + '">';
+                    
+                    // Make location header clickable for context search
+                    const locationData = `data-book="${location.book}" data-chapter="${location.chapter}" data-verse="${location.verse}"`;
+                    html += `<div class="location-header clickable-location" ${locationData}>
+                        ${location.book} פרק ${location.chapter}, פסוק ${location.verse}
+                    </div>`;
+                    
+                    // Make highlighted words NOT clickable as requested
+                    const highlightedText = location.text.replace(/\[([^\]]+)\]/g, 
+                        `<span class="highlight">$1</span>`);
+                    
+                    html += '<div class="verse-text">' + highlightedText + '</div>';
+                    html += '</div>';
+                });
+                
+                html += '</div>'; // End locations-container
+                
+                resultItem.innerHTML = html;
+                resultsDiv.appendChild(resultItem);
+            });
+            
+            // Initialize all location containers as collapsed by default
+            data.results.forEach((result, index) => {
+                const container = document.getElementById('result-' + index);
+                if (container) {
+                    // Add collapsed class
+                    container.classList.add('collapsed');
+                    container.style.maxHeight = '0';
+                    
+                    // Update toggle icon
+                    const toggle = document.querySelector(`[data-result-id="result-${index}"] .variant-toggle`);
+                    if (toggle) {
+                        toggle.classList.add('collapsed');
+                        toggle.textContent = '◀';
+                    }
+                }
+            });
+            
+            // Add click event listeners to all variant headers
+            document.querySelectorAll('.variant-header').forEach(header => {
+                header.addEventListener('click', function() {
+                    const resultId = this.getAttribute('data-result-id');
+                    toggleVariant(resultId);
+                });
+            });
+            
+            // Add click event listeners to all clickable variants
+            document.querySelectorAll('.clickable-variant').forEach(variant => {
+                variant.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent triggering the variant header click
+                    
+                    // Get variant data
+                    const variantText = this.getAttribute('data-variant');
+                    const sources = this.getAttribute('data-sources');
+                    
+                    // Get location data if available
+                    const book = this.getAttribute('data-book');
+                    const chapter = this.getAttribute('data-chapter');
+                    const verse = this.getAttribute('data-verse');
+                    
+                    // Show context search modal
+                    showSearchContextModal(variantText, sources, book, chapter, verse);
+                });
+            });
+            
+            // Add click event listeners to all clickable location headers
+            document.querySelectorAll('.clickable-location').forEach(location => {
+                location.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent triggering the variant header click
+                    
+                    // Get location data
+                    const book = this.getAttribute('data-book');
+                    const chapter = this.getAttribute('data-chapter');
+                    const verse = this.getAttribute('data-verse');
+                    
+                    // Show context search modal with empty variant text
+                    showLocationSearchModal(book, chapter, verse);
+                });
+            });
         }
         
         // Function to show the location search modal
