@@ -12,8 +12,8 @@ services:
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - MAX_WORKERS=16  # Optimized for c5.4xlarge with 16 vCPUs
-      - BATCH_SIZE_MULTIPLIER=300  # Increased for c5.4xlarge with 16 vCPUs
+      - MAX_WORKERS=8  # Optimized for c5.4xlarge with 16 vCPUs
+      - BATCH_SIZE_MULTIPLIER=200  # Increased for c5.4xlarge with 16 vCPUs
       - REDIS_POOL_SIZE=40
       - REDIS_MAX_CONNECTIONS=80
       - PROMETHEUS_METRICS=true
@@ -39,7 +39,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=16
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=8
     environment:
       - FLASK_ENV=${FLASK_ENV}
       - DATABASE_URL=${DATABASE_URL}
