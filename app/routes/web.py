@@ -1163,9 +1163,6 @@ def get_main_template():
                         ${location.book} פרק ${location.chapter}, פסוק ${location.verse}
                     </div>`;
                     
-                    // Store location data as attributes for context search
-                    const locationData = `data-book="${location.book}" data-chapter="${location.chapter}" data-verse="${location.verse}"`;
-                    
                     // Make highlighted words clickable for context search
                     const highlightedText = location.text.replace(/\[([^\]]+)\]/g, 
                         `<span class="highlight clickable-variant" ${locationData} data-variant="$1">$1</span>`);
@@ -1209,8 +1206,11 @@ def get_main_template():
             document.getElementById('resultsControls').style.display = 'block';
             
             // Add click event listeners to all clickable variants
+            console.log("Setting up clickable variants:", document.querySelectorAll('.clickable-variant').length);
             document.querySelectorAll('.clickable-variant').forEach(variant => {
+                console.log("Adding click listener to variant:", variant.textContent);
                 variant.addEventListener('click', function(e) {
+                    console.log("Variant clicked:", this.textContent);
                     e.stopPropagation(); // Prevent triggering the variant header click
                     
                     // Get variant data
@@ -1228,14 +1228,19 @@ def get_main_template():
             });
             
             // Add click event listeners to all clickable location headers
+            console.log("Setting up clickable locations:", document.querySelectorAll('.clickable-location').length);
             document.querySelectorAll('.clickable-location').forEach(location => {
+                console.log("Adding click listener to location:", location.textContent.trim());
                 location.addEventListener('click', function(e) {
+                    console.log("Location clicked:", this.textContent.trim());
                     e.stopPropagation(); // Prevent triggering the variant header click
                     
                     // Get location data
                     const book = this.getAttribute('data-book');
                     const chapter = this.getAttribute('data-chapter');
                     const verse = this.getAttribute('data-verse');
+                    
+                    console.log("Location data:", book, chapter, verse);
                     
                     // Show context search modal with empty variant text
                     // This will allow the user to enter a new search term
