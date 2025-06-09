@@ -96,22 +96,46 @@ class SearchService:
         if not lines:
             raise ValueError("Torah text not loaded")
         
-        # Generate variants and build automaton
-        variant_tuples = self.letter_mappings.generate_all_variants(phrase)
-        automaton = self._build_automaton(variant_tuples)
+        # Check if this is a multi-word search
+        words = phrase.strip().split()
+        is_multi_word = len(words) > 1
         
-        # Log the search parameters
-        logger.info("search_parameters", 
-                   phrase=phrase, 
-                   phrase_length=len(phrase.replace(' ', '')),
-                   is_memory_search=is_memory_search,
-                   variant_count=len(variant_tuples))
-        
-        # Perform parallel search
-        grouped_matches = self._search_parallel(
-            automaton, lines, len(phrase.replace(' ', '')), phrase, full_text, 
-            partial_results_callback, is_memory_search
-        )
+        # For multi-word searches where words can be anywhere in the verse
+        if is_multi_word:
+            logger.info("multi_word_search", 
+                       phrase=phrase, 
+                       word_count=len(words),
+                       is_memory_search=is_memory_search)
+            
+            # Generate variants for each word separately
+            word_variants = []
+            for word in words:
+                word_variant_tuples = self.letter_mappings.generate_all_variants(word)
+                word_automaton = self._build_automaton(word_variant_tuples)
+                word_variants.append((word, word_automaton))
+            
+            # Perform parallel search for multi-word phrases
+            grouped_matches = self._search_parallel_multi_word(
+                word_variants, lines, phrase, full_text, 
+                partial_results_callback, is_memory_search
+            )
+        else:
+            # Original single-word or exact phrase search
+            variant_tuples = self.letter_mappings.generate_all_variants(phrase)
+            automaton = self._build_automaton(variant_tuples)
+            
+            # Log the search parameters
+            logger.info("search_parameters", 
+                       phrase=phrase, 
+                       phrase_length=len(phrase.replace(' ', '')),
+                       is_memory_search=is_memory_search,
+                       variant_count=len(variant_tuples))
+            
+            # Perform parallel search
+            grouped_matches = self._search_parallel(
+                automaton, lines, len(phrase.replace(' ', '')), phrase, full_text, 
+                partial_results_callback, is_memory_search
+            )
         
         # Format results
         results = []
@@ -429,5 +453,278 @@ class SearchService:
                                 marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
                                 results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
                                 break
+        
+        return results
+    
+    def _search_parallel_multi_word(self, word_variants, lines, input_phrase, full_text, 
+                                   partial_results_callback=None, is_memory_search=False):
+        """
+        Perform parallel search for multi-word phrases where words can appear anywhere in the verse.
+        
+        Args:
+            word_variants: List of (word, automaton) tuples for each word in the search phrase
+            lines: Torah text lines
+            input_phrase: Original input phrase
+            full_text: Full Torah text
+            partial_results_callback: Callback for partial results
+            is_memory_search: Whether this is a memory search
+            
+        Returns:
+            Dictionary of grouped matches
+        """
+        grouped_matches = defaultdict(list)
+        
+        # Check if we should use book-based parallelization
+        use_book_parallel = current_app.config.get('USE_BOOK_PARALLEL_SEARCH', False)
+        
+        # Log the parallelization method being used
+        logger.info("multi_word_search_parallelization", 
+                   use_book_parallel=use_book_parallel, 
+                   max_workers=current_app.config.get('MAX_WORKERS', 4),
+                   input_phrase=input_phrase,
+                   word_count=len(word_variants))
+        
+        if use_book_parallel:
+            # Group lines by book
+            book_lines = self._group_lines_by_book(lines)
+            
+            # Use maximum number of workers for better performance
+            num_workers = current_app.config['MAX_WORKERS']
+            
+            # Use context manager for thread pool
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                # Submit search for each book
+                future_to_book = {
+                    executor.submit(
+                        self._search_batch_multi_word,
+                        book_lines[book], word_variants, input_phrase, full_text, is_memory_search
+                    ): book
+                    for book in book_lines
+                }
+                
+                # Collect results as they complete
+                for future in as_completed(future_to_book):
+                    try:
+                        book = future_to_book[future]
+                        book_results = future.result(timeout=60)  # Longer timeout for book search
+                        
+                        # Process book results
+                        book_partial_results = []
+                        
+                        for variant_combo, source_combo, book_name, chapter, verse_num, marked_text in book_results:
+                            # Create a combined variant string and sources
+                            combined_variant = " + ".join(variant_combo)
+                            combined_sources = tuple(source for source in source_combo)
+                            
+                            grouped_matches[(combined_variant, combined_sources)].append({
+                                'book': book_name,
+                                'chapter': chapter,
+                                'verse': verse_num,
+                                'text': marked_text
+                            })
+                            
+                            # Add to partial results
+                            if combined_variant not in [r['variant'] for r in book_partial_results]:
+                                book_partial_results.append({
+                                    'variant': combined_variant,
+                                    'sources': list(combined_sources)
+                                })
+                        
+                        # Call the callback with partial results if provided
+                        if partial_results_callback and book_partial_results:
+                            partial_results_callback(book_partial_results)
+                        
+                        logger.info("multi_word_book_search_completed", 
+                                   book=book, 
+                                   results_count=len(book_results))
+                            
+                    except Exception as e:
+                        book = future_to_book[future]
+                        logger.error("multi_word_book_search_error", book=book, error=str(e), exc_info=True)
+        else:
+            # Original line-based parallelization
+            num_workers = current_app.config['MAX_WORKERS']
+            batch_multiplier = current_app.config.get('BATCH_SIZE_MULTIPLIER', 150)
+            batch_size = max(batch_multiplier, len(lines) // num_workers)
+            batches = [lines[i:i+batch_size] for i in range(0, len(lines), batch_size)]
+            
+            # Use context manager for thread pool
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                # Submit all batch searches
+                future_to_batch = {
+                    executor.submit(
+                        self._search_batch_multi_word,
+                        batch, word_variants, input_phrase, full_text, is_memory_search
+                    ): batch_idx
+                    for batch_idx, batch in enumerate(batches)
+                }
+                
+                # Collect results as they complete
+                for future in as_completed(future_to_batch):
+                    try:
+                        batch_results = future.result(timeout=30)
+                        
+                        # Process batch results
+                        batch_partial_results = []
+                        
+                        for variant_combo, source_combo, book, chapter, verse_num, marked_text in batch_results:
+                            # Create a combined variant string and sources
+                            combined_variant = " + ".join(variant_combo)
+                            combined_sources = tuple(source for source in source_combo)
+                            
+                            grouped_matches[(combined_variant, combined_sources)].append({
+                                'book': book,
+                                'chapter': chapter,
+                                'verse': verse_num,
+                                'text': marked_text
+                            })
+                            
+                            # Add to partial results
+                            if combined_variant not in [r['variant'] for r in batch_partial_results]:
+                                batch_partial_results.append({
+                                    'variant': combined_variant,
+                                    'sources': list(combined_sources)
+                                })
+                        
+                        # Call the callback with partial results if provided
+                        if partial_results_callback and batch_partial_results:
+                            partial_results_callback(batch_partial_results)
+                            
+                    except Exception as e:
+                        batch_idx = future_to_batch[future]
+                        logger.error("multi_word_batch_search_error", batch=batch_idx, error=str(e), exc_info=True)
+        
+        return grouped_matches
+    
+    def _search_batch_multi_word(self, batch_lines, word_variants, input_phrase, full_text, is_memory_search=False):
+        """
+        Search for multiple words in a batch of lines, where words can appear anywhere in the verse.
+        
+        Args:
+            batch_lines: Lines of Torah text to search
+            word_variants: List of (word, automaton) tuples for each word in the search phrase
+            input_phrase: Original input phrase
+            full_text: Full Torah text
+            is_memory_search: Whether this is a memory search
+            
+        Returns:
+            List of matches with variant combinations
+        """
+        results = []
+        book = chapter = None
+        
+        # Get the original words
+        original_words = [word for word, _ in word_variants]
+        
+        # Log the search batch parameters
+        logger.info("multi_word_search_batch", 
+                   input_phrase=input_phrase,
+                   words=original_words,
+                   is_memory_search=is_memory_search)
+        
+        for line in batch_lines:
+            line = line.strip()
+            
+            # Check for book/chapter headers
+            match = re.match(r'^(\S+)\s+\u05e4\u05e8\u05e7-([\u05d0-\u05ea]+)$', line)
+            if match:
+                book, chapter = match.groups()
+                continue
+            
+            # Find verses
+            verses = re.findall(r'\{[^}]+\}[^{}]+', line)
+            for verse in verses:
+                verse_num_match = re.search(r'\{([^}]+)\}', verse)
+                verse_num = verse_num_match.group(1) if verse_num_match else "?"
+                clean_verse = re.sub(r'\{[^}]+\}', '', verse).strip()
+                
+                # Skip very short verses
+                if len(clean_verse) < 5:
+                    continue
+                
+                # Find matches for each word
+                word_matches = []
+                
+                for i, (word, automaton) in enumerate(word_variants):
+                    # Find all matches for this word in the verse
+                    word_match_list = []
+                    
+                    for end_index, (variant, source) in automaton.iter(clean_verse):
+                        start_index = end_index - len(variant) + 1
+                        matched_text = clean_verse[start_index:end_index + 1]
+                        
+                        # Check if this is a valid match based on search type
+                        is_valid_match = False
+                        
+                        if is_memory_search:
+                            # For memory search, check word boundaries and length rules
+                            is_word_boundary_start = (start_index == 0 or clean_verse[start_index - 1] == ' ')
+                            is_word_boundary_end = (end_index == len(clean_verse) - 1 or clean_verse[end_index + 1] == ' ')
+                            
+                            if is_word_boundary_start and is_word_boundary_end:
+                                # Check length rules for memory search
+                                word_length = len(word.replace(' ', ''))
+                                variant_length = len(variant)
+                                
+                                if variant_length == word_length:
+                                    # Exact length match
+                                    is_valid_match = True
+                                elif variant_length > word_length and any(variant.startswith(prefix) for prefix in ['ל', 'ו', 'מ']):
+                                    # Special prefix exception
+                                    is_valid_match = True
+                        else:
+                            # For indexed search, accept all matches
+                            is_valid_match = True
+                        
+                        if is_valid_match:
+                            word_match_list.append((variant, tuple(source), start_index, end_index))
+                    
+                    # If we found matches for this word, add them to the list
+                    if word_match_list:
+                        word_matches.append(word_match_list)
+                    else:
+                        # If any word has no matches, skip this verse
+                        break
+                
+                # If we have matches for all words, create combinations
+                if len(word_matches) == len(word_variants):
+                    # Generate all possible combinations of matches
+                    for combo in itertools.product(*word_matches):
+                        # Check for overlaps
+                        has_overlap = False
+                        for i in range(len(combo)):
+                            for j in range(i + 1, len(combo)):
+                                # Check if the matches overlap
+                                start1, end1 = combo[i][2], combo[i][3]
+                                start2, end2 = combo[j][2], combo[j][3]
+                                
+                                if (start1 <= start2 <= end1) or (start1 <= end2 <= end1) or \
+                                   (start2 <= start1 <= end2) or (start2 <= end1 <= end2):
+                                    has_overlap = True
+                                    break
+                            
+                            if has_overlap:
+                                break
+                        
+                        if not has_overlap:
+                            # Extract variants and sources
+                            variants = [match[0] for match in combo]
+                            sources = [match[1] for match in combo]
+                            
+                            # Create marked text with all matches highlighted
+                            marked_text = clean_verse
+                            
+                            # Sort matches by position (right to left for Hebrew)
+                            sorted_matches = sorted(combo, key=lambda x: -x[2])
+                            
+                            # Apply highlights from right to left
+                            for variant, _, start_index, end_index in sorted_matches:
+                                prefix = marked_text[:start_index]
+                                match_text = marked_text[start_index:end_index + 1]
+                                suffix = marked_text[end_index + 1:]
+                                marked_text = prefix + f'[{match_text}]' + suffix
+                            
+                            # Add to results
+                            results.append((variants, sources, book, chapter, verse_num, marked_text))
         
         return results
