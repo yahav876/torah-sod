@@ -21,7 +21,7 @@ class BaseConfig:
     SEARCH_TIMEOUT = int(os.environ.get('SEARCH_TIMEOUT', '300'))  # 5 minutes
     
     # Database settings
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///:memory:'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:////tmp/db.sqlite'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_size': 15,
@@ -137,7 +137,7 @@ class AWSConfig(ProductionConfig):
     
     # Use AWS services
     REDIS_URL = os.environ.get('AWS_ELASTICACHE_URL')
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///:memory:'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:////tmp/db.sqlite'
     ELASTICSEARCH_URL = os.environ.get('AWS_ELASTICSEARCH_URL')
     
     # AWS-specific settings

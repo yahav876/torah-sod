@@ -8,7 +8,7 @@ services:
     environment:
       - FLASK_ENV=${FLASK_ENV}
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL="sqlite:///:memory:"
+      - DATABASE_URL=sqlite:////tmp/db.sqlite
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
@@ -20,6 +20,7 @@ services:
       - USE_BOOK_PARALLEL_SEARCH=true  # Enable book-based parallel search
     volumes:
       - ./torah.txt:/app/torah.txt:ro
+      - sqlite-data:/tmp
     restart: unless-stopped
     deploy:
       resources:
@@ -42,7 +43,7 @@ services:
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=8
     environment:
       - FLASK_ENV=${FLASK_ENV}
-      - DATABASE_URL="sqlite:///:memory:"
+      - DATABASE_URL=sqlite:////tmp/db.sqlite
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
@@ -50,6 +51,7 @@ services:
       - USE_BOOK_PARALLEL_SEARCH=true  # Enable book-based parallel search
     volumes:
       - ./torah.txt:/app/torah.txt:ro
+      - sqlite-data:/tmp
     restart: unless-stopped
     deploy:
       resources:
@@ -71,6 +73,9 @@ services:
     restart: unless-stopped
     networks:
       - tzfanim-network
+
+volumes:
+  sqlite-data:
 
 networks:
   tzfanim-network:

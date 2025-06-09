@@ -21,7 +21,7 @@ services:
     environment:
       - FLASK_ENV=${FLASK_ENV:-production}
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL="sqlite:///:memory:"
+      - DATABASE_URL=sqlite:////tmp/db.sqlite
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
@@ -32,6 +32,7 @@ services:
       - USE_BOOK_PARALLEL_SEARCH=true
     volumes:
       - ./torah.txt:/app/torah.txt:ro
+      - sqlite-data:/tmp
     networks:
       - torah-network
     deploy:
@@ -54,12 +55,13 @@ services:
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=16
     environment:
       - FLASK_ENV=${FLASK_ENV:-production}
-      - DATABASE_URL="sqlite:///:memory:"
+      - DATABASE_URL=sqlite:////tmp/db.sqlite
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     volumes:
       - ./torah.txt:/app/torah.txt:ro
+      - sqlite-data:/tmp
     depends_on:
       - redis
     networks:
@@ -67,6 +69,7 @@ services:
 
 volumes:
   redis-data:
+  sqlite-data:
 
 networks:
   torah-network:
