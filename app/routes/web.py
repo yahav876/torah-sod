@@ -278,7 +278,7 @@ def get_main_template():
         }
         
         .variant {
-            font-size: 24px;
+            font-size: 18px; /* Reduced by 25% from 24px */
             font-weight: bold;
             color: #2c3e50;
             margin-bottom: 10px;
