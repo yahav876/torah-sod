@@ -377,35 +377,53 @@ class SearchService:
                     
                     # Apply the special rule for words in memory search
                     if matched_text == variant and variant != input_phrase:
-                        # Log for debugging
-                        logger.info("search_match_debug", 
-                                   variant=variant, 
-                                   variant_length=len(variant),
-                                   input_phrase=input_phrase,
-                                   input_word_length=input_word_length,
-                                   is_memory_search=is_memory_search,
-                                   source=str(source))
-                        
+                        # For memory search, we need to check if this is a complete word match
                         if is_memory_search:
-                            # If the variant has exactly the same number of letters as the input phrase, include it
-                            if len(variant) == input_word_length:
-                                logger.info("match_exact_length", variant=variant)
-                                if variant in full_text:
-                                    marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
-                                    results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
-                                    break
-                            # If the variant starts with one of the special prefixes and has more letters than the input phrase
-                            elif len(variant) > input_word_length and any(variant.startswith(prefix) for prefix in special_prefixes):
-                                prefix_match = next((p for p in special_prefixes if variant.startswith(p)), None)
-                                logger.info("match_prefix", variant=variant, prefix=prefix_match)
-                                if variant in full_text:
-                                    marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
-                                    results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
-                                    break
+                            # Check if the match is a complete word (not part of a larger word)
+                            is_word_boundary_start = (start_index == 0 or clean_verse[start_index - 1] == ' ')
+                            is_word_boundary_end = (end_index == len(clean_verse) - 1 or clean_verse[end_index + 1] == ' ')
+                            
+                            if is_word_boundary_start and is_word_boundary_end:
+                                # This is a complete word match
+                                # Log for debugging
+                                logger.info("complete_word_match", 
+                                           variant=variant, 
+                                           variant_length=len(variant),
+                                           input_phrase=input_phrase,
+                                           input_word_length=input_word_length)
+                                
+                                # Check if the variant has exactly the same number of letters as the input phrase
+                                if len(variant) == input_word_length:
+                                    logger.info("match_exact_length", 
+                                              variant=variant, 
+                                              input_phrase=input_phrase,
+                                              both_lengths=f"{len(variant)}=={input_word_length}")
+                                    if variant in full_text:
+                                        marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
+                                        results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
+                                        break
+                                # If the variant starts with one of the special prefixes and has more letters than the input phrase
+                                elif len(variant) > input_word_length and any(variant.startswith(prefix) for prefix in special_prefixes):
+                                    prefix_match = next((p for p in special_prefixes if variant.startswith(p)), None)
+                                    logger.info("match_prefix", variant=variant, prefix=prefix_match)
+                                    if variant in full_text:
+                                        marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
+                                        results.append((variant, tuple(source), book, chapter, verse_num, marked_text))
+                                        break
+                                else:
+                                    logger.info("skip_variant", 
+                                              variant=variant, 
+                                              variant_length=len(variant),
+                                              input_length=input_word_length,
+                                              reason=f"length_mismatch: {len(variant)} != {input_word_length}")
                             else:
-                                logger.info("skip_variant", variant=variant, reason="length_mismatch")
+                                # This is a partial match within a larger word
+                                logger.info("skip_partial_match", 
+                                          variant=variant,
+                                          containing_word_context=clean_verse[max(0, start_index-5):min(len(clean_verse), end_index+6)],
+                                          reason="not_complete_word")
                         else:
-                            # Original behavior for indexed search
+                            # Original behavior for indexed search (allows partial matches)
                             logger.info("indexed_search_match", variant=variant)
                             if variant in full_text:
                                 marked_text = clean_verse.replace(variant, f'[{variant}]', 1)
