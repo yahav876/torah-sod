@@ -574,25 +574,40 @@ def get_main_template():
                     <!-- Book Filter -->
                     <div style="min-width: 200px;">
                         <div style="font-weight: bold; margin-bottom: 5px;">סינון לפי ספר:</div>
-                        <select id="bookFilter" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
-                            <option value="all">כל הספרים</option>
-                            <option value="בראשית">בראשית</option>
-                            <option value="שמות">שמות</option>
-                            <option value="ויקרא">ויקרא</option>
-                            <option value="במדבר">במדבר</option>
-                            <option value="דברים">דברים</option>
-                        </select>
+                        <div id="bookFilterContainer" class="checkbox-group" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 8px;">
+                            <!-- Will be populated dynamically -->
+                        </div>
                     </div>
                     
                     <!-- Source Filter -->
                     <div style="min-width: 200px;">
                         <div style="font-weight: bold; margin-bottom: 5px;">סינון לפי מקור:</div>
-                        <select id="sourceFilter" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
-                            <option value="all">כל המקורות</option>
+                        <div id="sourceFilterContainer" class="checkbox-group" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 8px;">
                             <!-- Will be populated dynamically -->
-                        </select>
+                        </div>
                     </div>
                 </div>
+                
+                <style>
+                    .checkbox-group {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 5px;
+                    }
+                    .checkbox-group label {
+                        display: flex;
+                        align-items: center;
+                        cursor: pointer;
+                        padding: 3px;
+                        border-radius: 3px;
+                    }
+                    .checkbox-group label:hover {
+                        background-color: #f0f0f0;
+                    }
+                    .checkbox-group input[type="checkbox"] {
+                        margin-left: 8px;
+                    }
+                </style>
                 
                 <div style="margin-top: 15px; text-align: center;">
                     <button id="applyFiltersBtn" class="control-btn">החל סינון</button>
@@ -1144,15 +1159,71 @@ def get_main_template():
             
             // Collect all unique sources and books for filters
             const allSources = new Set();
+            const allBooks = new Set();
+            
             data.results.forEach(result => {
+                // Add sources
                 result.sources.forEach(source => allSources.add(source));
+                
+                // Add books
+                result.locations.forEach(location => {
+                    allBooks.add(location.book);
+                });
             });
             
-            // Populate the source filter dropdown
-            const sourceFilter = document.getElementById('sourceFilter');
-            sourceFilter.innerHTML = '<option value="all">כל המקורות</option>';
+            // Populate the book filter checkboxes
+            const bookFilterContainer = document.getElementById('bookFilterContainer');
+            bookFilterContainer.innerHTML = '';
+            
+            // Add "Select All" checkbox for books
+            const selectAllBooksLabel = document.createElement('label');
+            selectAllBooksLabel.innerHTML = `<input type="checkbox" class="select-all-books" checked> בחר הכל`;
+            selectAllBooksLabel.style.fontWeight = 'bold';
+            selectAllBooksLabel.style.borderBottom = '1px solid #ddd';
+            selectAllBooksLabel.style.paddingBottom = '5px';
+            selectAllBooksLabel.style.marginBottom = '5px';
+            bookFilterContainer.appendChild(selectAllBooksLabel);
+            
+            // Add individual book checkboxes
+            Array.from(allBooks).sort().forEach(book => {
+                const label = document.createElement('label');
+                label.innerHTML = `<input type="checkbox" name="bookFilter" value="${book}" checked> ${book}`;
+                bookFilterContainer.appendChild(label);
+            });
+            
+            // Populate the source filter checkboxes
+            const sourceFilterContainer = document.getElementById('sourceFilterContainer');
+            sourceFilterContainer.innerHTML = '';
+            
+            // Add "Select All" checkbox for sources
+            const selectAllSourcesLabel = document.createElement('label');
+            selectAllSourcesLabel.innerHTML = `<input type="checkbox" class="select-all-sources" checked> בחר הכל`;
+            selectAllSourcesLabel.style.fontWeight = 'bold';
+            selectAllSourcesLabel.style.borderBottom = '1px solid #ddd';
+            selectAllSourcesLabel.style.paddingBottom = '5px';
+            selectAllSourcesLabel.style.marginBottom = '5px';
+            sourceFilterContainer.appendChild(selectAllSourcesLabel);
+            
+            // Add individual source checkboxes - only include sources that exist in the results
             Array.from(allSources).sort().forEach(source => {
-                sourceFilter.innerHTML += `<option value="${source}">${source}</option>`;
+                const label = document.createElement('label');
+                label.innerHTML = `<input type="checkbox" name="sourceFilter" value="${source}" checked> ${source}`;
+                sourceFilterContainer.appendChild(label);
+            });
+            
+            // Add event listeners for "Select All" checkboxes
+            document.querySelector('.select-all-books').addEventListener('change', function() {
+                const isChecked = this.checked;
+                document.querySelectorAll('input[name="bookFilter"]').forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                });
+            });
+            
+            document.querySelector('.select-all-sources').addEventListener('change', function() {
+                const isChecked = this.checked;
+                document.querySelectorAll('input[name="sourceFilter"]').forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                });
             });
             
             // Show the filters section
@@ -1466,10 +1537,22 @@ def get_main_template():
         function applyFilters() {
             if (!originalSearchResults) return;
             
-            const bookFilter = document.getElementById('bookFilter').value;
-            const sourceFilter = document.getElementById('sourceFilter').value;
+            // Get selected books
+            const selectedBooks = [];
+            document.querySelectorAll('input[name="bookFilter"]:checked').forEach(checkbox => {
+                selectedBooks.push(checkbox.value);
+            });
             
-            console.log("Applying filters:", { bookFilter, sourceFilter });
+            // Get selected sources
+            const selectedSources = [];
+            document.querySelectorAll('input[name="sourceFilter"]:checked').forEach(checkbox => {
+                selectedSources.push(checkbox.value);
+            });
+            
+            console.log("Applying filters:", { 
+                selectedBooks, 
+                selectedSources 
+            });
             
             // Clone the original results
             const filteredData = JSON.parse(JSON.stringify(originalSearchResults));
@@ -1477,24 +1560,24 @@ def get_main_template():
             
             // Apply filters to each result
             for (const result of filteredData.results) {
-                // Filter by source
-                if (sourceFilter !== 'all' && !result.sources.includes(sourceFilter)) {
+                // Check if any of the result's sources are in the selected sources
+                const hasSelectedSource = result.sources.some(source => 
+                    selectedSources.includes(source)
+                );
+                
+                // Skip if none of the result's sources are selected
+                if (!hasSelectedSource) {
                     continue;
                 }
                 
-                // Filter locations by book
-                if (bookFilter !== 'all') {
-                    const filteredLocations = result.locations.filter(location => 
-                        location.book === bookFilter
-                    );
-                    
-                    if (filteredLocations.length > 0) {
-                        // Update the result with filtered locations
-                        result.locations = filteredLocations;
-                        filteredResults.push(result);
-                    }
-                } else {
-                    // No book filter, include all locations
+                // Filter locations by selected books
+                const filteredLocations = result.locations.filter(location => 
+                    selectedBooks.includes(location.book)
+                );
+                
+                if (filteredLocations.length > 0) {
+                    // Update the result with filtered locations
+                    result.locations = filteredLocations;
                     filteredResults.push(result);
                 }
             }
@@ -1510,14 +1593,25 @@ def get_main_template():
             const statsDiv = document.querySelector('.stats');
             if (statsDiv) {
                 statsDiv.innerHTML = `<strong>נמצאו ${filteredResults.length} וריאציות</strong> (מתוך ${originalSearchResults.total_variants} סך הכל)<br>`;
-                statsDiv.innerHTML += `סינון: ${bookFilter === 'all' ? 'כל הספרים' : bookFilter}, ${sourceFilter === 'all' ? 'כל המקורות' : sourceFilter}`;
+                statsDiv.innerHTML += `סינון: ${selectedBooks.length} ספרים, ${selectedSources.length} מקורות`;
             }
         }
         
         // Function to reset filters
         function resetFilters() {
-            document.getElementById('bookFilter').value = 'all';
-            document.getElementById('sourceFilter').value = 'all';
+            // Check all book checkboxes
+            document.querySelectorAll('input[name="bookFilter"]').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            
+            // Check all source checkboxes
+            document.querySelectorAll('input[name="sourceFilter"]').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            
+            // Check the "Select All" checkboxes
+            document.querySelector('.select-all-books').checked = true;
+            document.querySelector('.select-all-sources').checked = true;
             
             if (originalSearchResults) {
                 renderResults(originalSearchResults);
