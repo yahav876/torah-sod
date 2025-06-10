@@ -1191,6 +1191,19 @@ def get_main_template():
                 bookFilterContainer.appendChild(label);
             });
             
+            // Define the 9 standard map options
+            const standardMaps = [
+                "אב״גד",
+                "את״בש",
+                "אל״במ",
+                "את״בח",
+                "איק-בכר",
+                "אחס-בטע",
+                "מוצאות-הפה",
+                "אהוי",
+                "מקור"
+            ];
+            
             // Populate the source filter checkboxes
             const sourceFilterContainer = document.getElementById('sourceFilterContainer');
             sourceFilterContainer.innerHTML = '';
@@ -1204,11 +1217,13 @@ def get_main_template():
             selectAllSourcesLabel.style.marginBottom = '5px';
             sourceFilterContainer.appendChild(selectAllSourcesLabel);
             
-            // Add individual source checkboxes - only include sources that exist in the results
-            Array.from(allSources).sort().forEach(source => {
-                const label = document.createElement('label');
-                label.innerHTML = `<input type="checkbox" name="sourceFilter" value="${source}" checked> ${source}`;
-                sourceFilterContainer.appendChild(label);
+            // Add only the standard maps that exist in the results
+            standardMaps.forEach(map => {
+                if (allSources.has(map)) {
+                    const label = document.createElement('label');
+                    label.innerHTML = `<input type="checkbox" name="sourceFilter" value="${map}" checked> ${map}`;
+                    sourceFilterContainer.appendChild(label);
+                }
             });
             
             // Add event listeners for "Select All" checkboxes
@@ -1554,6 +1569,14 @@ def get_main_template():
                 selectedSources 
             });
             
+            // Check if any filters are selected
+            if (selectedBooks.length === 0 || selectedSources.length === 0) {
+                // No filters selected, show a message
+                document.getElementById('results').innerHTML = 
+                    '<div class="error">אנא בחר לפחות ספר אחד ומקור אחד</div>';
+                return;
+            }
+            
             // Clone the original results
             const filteredData = JSON.parse(JSON.stringify(originalSearchResults));
             const filteredResults = [];
@@ -1570,15 +1593,17 @@ def get_main_template():
                     continue;
                 }
                 
+                // Create a copy of the result with only filtered locations
+                const filteredResult = JSON.parse(JSON.stringify(result));
+                
                 // Filter locations by selected books
-                const filteredLocations = result.locations.filter(location => 
+                filteredResult.locations = filteredResult.locations.filter(location => 
                     selectedBooks.includes(location.book)
                 );
                 
-                if (filteredLocations.length > 0) {
-                    // Update the result with filtered locations
-                    result.locations = filteredLocations;
-                    filteredResults.push(result);
+                // Only add the result if it has matching locations
+                if (filteredResult.locations.length > 0) {
+                    filteredResults.push(filteredResult);
                 }
             }
             
