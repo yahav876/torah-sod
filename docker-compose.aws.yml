@@ -68,7 +68,7 @@ services:
       - "80:80"
     volumes:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./app/static:/app/static:ro
+      - ./app/static/favicon.ico:/usr/share/nginx/html/favicon.ico:ro
     depends_on:
       - tzfanim-search
     restart: unless-stopped
