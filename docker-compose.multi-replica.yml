@@ -8,7 +8,7 @@ services:
       - "80:80"
     volumes:
       - ./docker/nginx-dynamic.conf:/etc/nginx/nginx.conf:ro
-      - ./favicon.ico:/app/favicon.ico:ro
+      - ./app/static:/app/static:ro
     depends_on:
       - tzfanim-search
     networks:
