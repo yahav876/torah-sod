@@ -9,10 +9,19 @@ services:
     volumes:
       - ./docker/nginx-dynamic.conf:/etc/nginx/nginx.conf:ro
       - ./app/static:/app/static:ro
+      - ./favicon.ico:/usr/share/nginx/html/favicon.ico:ro
     depends_on:
       - tzfanim-search
     networks:
       - torah-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 1G  # Allocate 1GB for Nginx
+    mem_reservation: 512M  # Reserve 512MB
 
   # Application Service (scalable)
   tzfanim-search:
@@ -26,10 +35,10 @@ services:
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - MAX_WORKERS=8
-      - BATCH_SIZE_MULTIPLIER=300
-      - REDIS_POOL_SIZE=40
-      - REDIS_MAX_CONNECTIONS=80
+      - MAX_WORKERS=8  # Optimized for t3.2xlarge with 8 vCPUs
+      - BATCH_SIZE_MULTIPLIER=400  # Increased for better performance
+      - REDIS_POOL_SIZE=60  # Increased for 3 replicas
+      - REDIS_MAX_CONNECTIONS=120  # Increased for 3 replicas
       - USE_BOOK_PARALLEL_SEARCH=true
     volumes:
       - ./torah.txt:/app/torah.txt:ro
@@ -37,29 +46,48 @@ services:
     networks:
       - torah-network
     deploy:
-      replicas: 3  # Default number of replicas
+      replicas: 3  # 3 replicas as requested
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    mem_limit: 8G  # Allocate 8GB per container (24GB total for 3 replicas)
+    mem_reservation: 4G  # Reserve 4GB per container
 
   # Redis (shared) - Remove if using ElastiCache
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 4gb --maxmemory-policy allkeys-lru --save 900 1 --save 300 10 --save 60 10000
     volumes:
       - redis-data:/data
     networks:
       - torah-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 5G  # Allocate 5GB for Redis
+    mem_reservation: 4G  # Reserve 4GB
 
   # Celery Worker
   celery-worker:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=16
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=8
     environment:
       - FLASK_ENV=${FLASK_ENV:-production}
       - DATABASE_URL=sqlite:////tmp/db.sqlite
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - MAX_WORKERS=8  # Match with application service
+      - BATCH_SIZE_MULTIPLIER=400  # Match with application service
     volumes:
       - ./torah.txt:/app/torah.txt:ro
       - sqlite-data:/tmp
@@ -67,6 +95,15 @@ services:
       - redis
     networks:
       - torah-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    mem_limit: 6G  # Allocate 6GB for Celery worker
+    mem_reservation: 3G  # Reserve 3GB
 
 volumes:
   redis-data:

@@ -34,8 +34,11 @@ def get_main_template():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Torah Search - חיפוש בתורה</title>
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <link rel="shortcut icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <!-- Force favicon refresh with different approaches -->
+    <link rel="apple-touch-icon" href="/favicon.ico?v=2">
+    <meta name="msapplication-TileImage" content="/favicon.ico?v=2">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
