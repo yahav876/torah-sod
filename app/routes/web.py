@@ -1217,13 +1217,18 @@ def get_main_template():
             selectAllSourcesLabel.style.marginBottom = '5px';
             sourceFilterContainer.appendChild(selectAllSourcesLabel);
             
-            // Add only the standard maps that exist in the results
+            // Always add all 9 standard maps, but highlight the ones that exist in the results
             standardMaps.forEach(map => {
-                if (allSources.has(map)) {
-                    const label = document.createElement('label');
-                    label.innerHTML = `<input type="checkbox" name="sourceFilter" value="${map}" checked> ${map}`;
-                    sourceFilterContainer.appendChild(label);
+                const label = document.createElement('label');
+                const exists = allSources.has(map);
+                label.innerHTML = `<input type="checkbox" name="sourceFilter" value="${map}" checked> ${map}`;
+                
+                // Highlight maps that exist in the results
+                if (exists) {
+                    label.style.fontWeight = 'bold';
                 }
+                
+                sourceFilterContainer.appendChild(label);
             });
             
             // Add event listeners for "Select All" checkboxes
