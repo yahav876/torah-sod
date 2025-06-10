@@ -1602,12 +1602,13 @@ def get_main_template():
                 const filteredResult = JSON.parse(JSON.stringify(result));
                 
                 // Filter locations by selected books
-                filteredResult.locations = filteredResult.locations.filter(location => 
+                const filteredLocations = filteredResult.locations.filter(location => 
                     selectedBooks.includes(location.book)
                 );
                 
                 // Only add the result if it has matching locations
-                if (filteredResult.locations.length > 0) {
+                if (filteredLocations.length > 0) {
+                    filteredResult.locations = filteredLocations;
                     filteredResults.push(filteredResult);
                 }
             }
@@ -1625,6 +1626,9 @@ def get_main_template():
                 statsDiv.innerHTML = `<strong>נמצאו ${filteredResults.length} וריאציות</strong> (מתוך ${originalSearchResults.total_variants} סך הכל)<br>`;
                 statsDiv.innerHTML += `סינון: ${selectedBooks.length} ספרים, ${selectedSources.length} מקורות`;
             }
+            
+            // Show the results controls
+            document.getElementById('resultsControls').style.display = 'block';
         }
         
         // Function to reset filters
