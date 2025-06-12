@@ -405,7 +405,7 @@ def search_status(job_id):
 
 
 @bp.route('/stats', methods=['GET'])
-@cache.cached(timeout=60)
+# Remove caching to ensure statistics are always up-to-date
 def stats():
     """Get application statistics."""
     try:

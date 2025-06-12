@@ -574,7 +574,7 @@ def get_main_template():
         
         <!-- About button in top left corner -->
         <div style="position: absolute; top: 10px; left: 20px;">
-            <a href="/about" class="about-btn">אודות</a>
+            <a href="/about" class="about-btn" style="padding: 8px 15px; background-color: #3498db; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: all 0.2s;">אודות</a>
         </div>
         
         <div class="header">
@@ -2357,8 +2357,12 @@ def get_admin_template():
         // Function to load statistics
         async function loadStats() {
             try {
-                const response = await fetch('/api/stats');
+                // Add a cache-busting parameter to prevent caching
+                const timestamp = new Date().getTime();
+                const response = await fetch(`/api/stats?_=${timestamp}`);
                 const data = await response.json();
+                
+                console.log("Loaded statistics:", data);
                 
                 if (data) {
                     document.getElementById('totalSearches').textContent = data.total_searches || 0;
@@ -2383,8 +2387,13 @@ def get_admin_template():
                     }
                 }
                 
+                // Set up auto-refresh for statistics every 30 seconds
+                setTimeout(loadStats, 30000);
+                
             } catch (error) {
                 console.error('Error loading stats:', error);
+                // Even if there's an error, try again after 30 seconds
+                setTimeout(loadStats, 30000);
             }
         }
     </script>
