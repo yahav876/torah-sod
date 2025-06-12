@@ -1,14 +1,28 @@
 """
 Web routes for Torah Search
 """
-from flask import Blueprint, render_template_string, current_app
+from flask import Blueprint, render_template_string, current_app, request, redirect, url_for, session, flash
 from app.app_factory import cache
 import structlog
+import os
+from functools import wraps
 
 logger = structlog.get_logger()
 
 bp = Blueprint('web', __name__)
 
+# Admin credentials - in a real app, these would be stored securely
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "torah123"  # This should be hashed in a real application
+
+# Login required decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            return redirect(url_for('web.admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 @bp.route('/')
 # Temporarily disable caching to ensure latest changes are visible
@@ -23,6 +37,34 @@ def index():
 def about():
     """About page."""
     return render_template_string(get_about_template())
+
+
+@bp.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Admin login page."""
+    error = None
+    if request.method == 'POST':
+        if request.form['username'] == ADMIN_USERNAME and request.form['password'] == ADMIN_PASSWORD:
+            session['logged_in'] = True
+            return redirect(url_for('web.admin'))
+        else:
+            error = 'שם משתמש או סיסמה שגויים'
+    
+    return render_template_string(get_admin_login_template(), error=error)
+
+
+@bp.route('/admin')
+@login_required
+def admin():
+    """Admin dashboard."""
+    return render_template_string(get_admin_template())
+
+
+@bp.route('/admin/logout')
+def admin_logout():
+    """Admin logout."""
+    session.pop('logged_in', None)
+    return redirect(url_for('web.index'))
 
 
 def get_main_template():
@@ -527,9 +569,19 @@ def get_main_template():
 </head>
 <body>
     <div class="container">
+        <!-- בס״ד in top right corner -->
+        <div style="position: absolute; top: 10px; right: 20px; font-size: 14px;">בס״ד</div>
+        
+        <!-- About button in top left corner -->
+        <div style="position: absolute; top: 10px; left: 20px;">
+            <a href="/about" class="about-btn">אודות</a>
+        </div>
+        
         <div class="header">
-            <h1>🔍 חיפוש בתורה</h1>
-            <p>חיפוש מילים בתורה בעזרת שיטות החלפת אותיות שונות</p>
+            <a href="/" style="text-decoration: none; color: inherit;">
+                <h1>🔍 חיפוש בתורה</h1>
+                <p>חיפוש מילים בתורה בעזרת שיטות החלפת אותיות שונות</p>
+            </a>
         </div>
         
         <div class="search-section">
@@ -543,7 +595,7 @@ def get_main_template():
                 
                 <div class="admin-options">
                     <div style="margin-bottom: 10px; font-weight: bold;">ניהול מערכת</div>
-                    <button id="clearCacheBtn" class="admin-btn">נקה את המטמון</button>
+                    <a href="/admin" class="admin-btn" style="display: inline-block; text-decoration: none;">כניסה למנהל</a>
                 </div>
             </div>
             
@@ -666,11 +718,6 @@ def get_main_template():
             });
             
             // Search type toggle handlers removed - using only in-memory search
-            
-            // Set up clear cache button handler
-            document.getElementById('clearCacheBtn').addEventListener('click', function() {
-                clearCache();
-            });
             
             // Set up cancel button handler
             document.getElementById('cancelBtn').addEventListener('click', function() {
@@ -1196,7 +1243,7 @@ def get_main_template():
                 "אב״גד",
                 "את״בש",
                 "אל״במ",
-                "את״בח",
+                "אט״בח",
                 "איק-בכר",
                 "אחס-בטע",
                 "מוצאות-הפה",
@@ -1444,33 +1491,7 @@ def get_main_template():
             });
         }
         
-        // Function to clear all search caches
-        async function clearCache() {
-            if (!confirm('האם אתה בטוח שברצונך לנקות את כל המטמון? פעולה זו תמחק את כל תוצאות החיפוש השמורות.')) {
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/admin/clear-cache', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('המטמון נוקה בהצלחה!');
-                } else {
-                    alert('שגיאה בניקוי המטמון: ' + (data.error || 'שגיאה לא ידועה'));
-                }
-                
-            } catch (error) {
-                console.error('Error clearing cache:', error);
-                alert('שגיאה בניקוי המטמון: ' + error.message);
-            }
-        }
+        // Function to clear all search caches - moved to admin page
         
         // Function to show the search context modal
         function showSearchContextModal(variantText, sources, book, chapter, verse) {
@@ -1931,8 +1952,11 @@ def get_about_template():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>אודות - Torah Search</title>
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <link rel="shortcut icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <!-- Force favicon refresh with different approaches -->
+    <link rel="apple-touch-icon" href="/favicon.ico?v=2">
+    <meta name="msapplication-TileImage" content="/favicon.ico?v=2">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1951,6 +1975,7 @@ def get_about_template():
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             overflow: hidden;
             padding: 40px;
+            position: relative;
         }
         
         h1 {
@@ -1963,15 +1988,406 @@ def get_about_template():
             line-height: 1.8;
             color: #34495e;
         }
+        
+        .about-btn {
+            position: absolute;
+            top: 10px;
+            left: 20px;
+            padding: 8px 15px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .about-btn:hover {
+            background-color: #2980b9;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- בס״ד in top right corner -->
+        <div style="position: absolute; top: 10px; right: 20px; font-size: 14px;">בס״ד</div>
+        
+        <!-- Home button in top left corner -->
+        <div style="position: absolute; top: 10px; left: 20px;">
+            <a href="/" class="about-btn">דף הבית</a>
+        </div>
+        
         <h1>אודות המערכת</h1>
         <p>מערכת חיפוש בתורה המאפשרת לחפש מילים וביטויים בעזרת שיטות החלפת אותיות שונות.</p>
         <p>המערכת משתמשת בטכנולוגיות מתקדמות לחיפוש מהיר ויעיל בטקסט התורה.</p>
-        <a href="/">חזרה לעמוד הראשי</a>
     </div>
+</body>
+</html>
+"""
+
+
+def get_admin_login_template():
+    """Return the admin login template."""
+    return """
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>כניסת מנהל - Torah Search</title>
+    <link rel="icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <link rel="shortcut icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            direction: rtl;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            padding: 40px;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #34495e;
+        }
+        
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            background: #2980b9;
+        }
+        
+        .error {
+            color: #e74c3c;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #fadbd8;
+            border-radius: 5px;
+        }
+        
+        .home-link {
+            margin-top: 20px;
+            display: block;
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        .home-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <!-- בס״ד in top right corner -->
+        <div style="position: absolute; top: 10px; right: 20px; font-size: 14px;">בס״ד</div>
+        
+        <h1>כניסת מנהל</h1>
+        
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        
+        <form method="post">
+            <div class="form-group">
+                <label for="username">שם משתמש:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">סיסמה:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <button type="submit">כניסה</button>
+        </form>
+        
+        <a href="/" class="home-link">חזרה לדף הבית</a>
+    </div>
+</body>
+</html>
+"""
+
+
+def get_admin_template():
+    """Return the admin dashboard template."""
+    return """
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>לוח בקרה למנהל - Torah Search</title>
+    <link rel="icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <link rel="shortcut icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            direction: rtl;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+            padding: 40px;
+            position: relative;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .admin-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-right: 5px solid #3498db;
+        }
+        
+        .admin-section h2 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        
+        .admin-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        
+        .admin-btn:hover {
+            background: #c0392b;
+        }
+        
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        
+        .nav-link {
+            padding: 10px 15px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .nav-link:hover {
+            background: #2980b9;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- בס״ד in top right corner -->
+        <div style="position: absolute; top: 10px; right: 20px; font-size: 14px;">בס״ד</div>
+        
+        <h1>לוח בקרה למנהל</h1>
+        
+        <div class="nav-links">
+            <a href="/" class="nav-link">חזרה לדף הבית</a>
+            <a href="/admin/logout" class="nav-link">התנתקות</a>
+        </div>
+        
+        <div class="admin-section">
+            <h2>ניהול מטמון</h2>
+            <p>ניקוי המטמון ימחק את כל תוצאות החיפוש השמורות ויאלץ את המערכת לחשב אותן מחדש.</p>
+            <button id="clearCacheBtn" class="admin-btn">נקה את המטמון</button>
+            <div id="cacheStatus" style="margin-top: 10px;"></div>
+        </div>
+        
+        <div class="admin-section">
+            <h2>סטטיסטיקות מערכת</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">חיפושים היום</div>
+                    <div class="stat-value" id="todaySearches">--</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">סך הכל חיפושים</div>
+                    <div class="stat-value" id="totalSearches">--</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">תוצאות במטמון</div>
+                    <div class="stat-value" id="cachedResults">--</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">זמן חיפוש ממוצע</div>
+                    <div class="stat-value" id="avgSearchTime">--</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up clear cache button handler
+            document.getElementById('clearCacheBtn').addEventListener('click', function() {
+                clearCache();
+            });
+            
+            // Load statistics
+            loadStats();
+        });
+        
+        // Function to clear all search caches
+        async function clearCache() {
+            if (!confirm('האם אתה בטוח שברצונך לנקות את כל המטמון? פעולה זו תמחק את כל תוצאות החיפוש השמורות.')) {
+                return;
+            }
+            
+            const statusDiv = document.getElementById('cacheStatus');
+            statusDiv.innerHTML = '<div style="color: #3498db;">מנקה את המטמון...</div>';
+            
+            try {
+                const response = await fetch('/api/admin/clear-cache', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = '<div style="color: #2ecc71;">המטמון נוקה בהצלחה!</div>';
+                    // Reload stats after clearing cache
+                    loadStats();
+                } else {
+                    statusDiv.innerHTML = '<div style="color: #e74c3c;">שגיאה בניקוי המטמון: ' + (data.error || 'שגיאה לא ידועה') + '</div>';
+                }
+                
+            } catch (error) {
+                console.error('Error clearing cache:', error);
+                statusDiv.innerHTML = '<div style="color: #e74c3c;">שגיאה בניקוי המטמון: ' + error.message + '</div>';
+            }
+        }
+        
+        // Function to load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                if (data) {
+                    document.getElementById('totalSearches').textContent = data.total_searches || 0;
+                    document.getElementById('cachedResults').textContent = data.cached_searches || 0;
+                    
+                    // Calculate today's searches
+                    const todaySearches = data.recent_searches ? 
+                        data.recent_searches.filter(s => {
+                            const searchDate = new Date(s.timestamp);
+                            const today = new Date();
+                            return searchDate.toDateString() === today.toDateString();
+                        }).length : 0;
+                    
+                    document.getElementById('todaySearches').textContent = todaySearches;
+                    
+                    // Calculate average search time
+                    if (data.recent_searches && data.recent_searches.length > 0) {
+                        const avgTime = data.recent_searches.reduce((sum, s) => sum + s.time, 0) / data.recent_searches.length;
+                        document.getElementById('avgSearchTime').textContent = avgTime.toFixed(2) + 's';
+                    } else {
+                        document.getElementById('avgSearchTime').textContent = '0s';
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+    </script>
 </body>
 </html>
 """

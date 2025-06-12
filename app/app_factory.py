@@ -30,6 +30,9 @@ def create_app(config_name=None):
     config_class = get_config(config_name)
     app.config.from_object(config_class)
     
+    # Set a secret key for sessions
+    app.secret_key = app.config.get('SECRET_KEY', os.urandom(24))
+    
     # Setup logging
     setup_logging(app)
     app.logger.info(f"Creating Torah Search app with config: {config_name or 'default'}")

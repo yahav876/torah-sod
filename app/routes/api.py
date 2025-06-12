@@ -487,6 +487,14 @@ def alb_health_check():
 @bp.route('/admin/clear-cache', methods=['POST'])
 def clear_cache():
     """Clear all cached searches from Redis and database."""
+    # Check if user is logged in
+    from flask import session
+    if 'logged_in' not in session:
+        return jsonify({
+            'success': False,
+            'error': 'Authentication required'
+        }), 401
+    
     try:
         # Clear Redis cache
         from app.shared.redis_client import get_redis_client

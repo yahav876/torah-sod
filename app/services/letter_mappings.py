@@ -67,7 +67,7 @@ class LetterMappings:
             ("אב״גד", self.abgd_map_1),
             ("את״בש", self.abgd_map_2),
             ("אל״במ", self.abgd_map_3),
-            ("את״בח", self.abgd_map_4)
+            ("אט״בח", self.abgd_map_4)
         ]
     
     def get_grouped_mapped(self, ch: str, map_group: List[List[str]], label: str, 
@@ -94,7 +94,7 @@ class LetterMappings:
         
         # Map 4
         if ch in self.abgd_map_4:
-            results.append((self.abgd_map_4[ch], "את״בח"))
+            results.append((self.abgd_map_4[ch], "אט״בח"))
         
         # Maps 5-8
         results.extend(self.get_grouped_mapped(ch, self.abgd_map_5, "איק-בכר"))
