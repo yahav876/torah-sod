@@ -410,29 +410,64 @@ def stats():
     """Get application statistics."""
     try:
         from app.services.torah_service import TorahService
-        from app.models.database import TorahVerse, SearchResult
+        from app.models.database import TorahVerse, SearchResult, SearchStatistics
         
         torah_service = TorahService()
         
-        stats = {
-            'torah_verses': TorahVerse.query.count(),
-            'cached_searches': SearchResult.query.count(),
-            'total_searches': SearchStatistics.query.count(),
-            'recent_searches': SearchStatistics.query.order_by(
-                SearchStatistics.created_at.desc()
-            ).limit(10).all()
-        }
+        # Log the database URL for debugging
+        logger.info("stats_request", database_url=current_app.config['SQLALCHEMY_DATABASE_URI'])
         
-        # Format recent searches
-        stats['recent_searches'] = [
-            {
-                'phrase': s.search_phrase,
-                'results': s.results_count,
-                'time': s.search_time,
-                'timestamp': s.created_at.isoformat()
-            }
-            for s in stats['recent_searches']
-        ]
+        # Check if tables exist
+        try:
+            torah_verses_count = TorahVerse.query.count()
+            cached_searches_count = SearchResult.query.count()
+            total_searches_count = SearchStatistics.query.count()
+            
+            logger.info("stats_counts", 
+                        torah_verses=torah_verses_count,
+                        cached_searches=cached_searches_count,
+                        total_searches=total_searches_count)
+            
+            # Get recent searches with error handling
+            try:
+                recent_searches = SearchStatistics.query.order_by(
+                    SearchStatistics.created_at.desc()
+                ).limit(10).all()
+                
+                # Log the number of recent searches found
+                logger.info("recent_searches_found", count=len(recent_searches))
+                
+                # Format recent searches
+                formatted_searches = []
+                for s in recent_searches:
+                    try:
+                        formatted_searches.append({
+                            'phrase': s.search_phrase,
+                            'results': s.results_count,
+                            'time': s.search_time,
+                            'timestamp': s.created_at.isoformat()
+                        })
+                    except Exception as format_error:
+                        logger.error("search_format_error", error=str(format_error))
+                
+            except Exception as search_error:
+                logger.error("recent_searches_error", error=str(search_error))
+                recent_searches = []
+                formatted_searches = []
+        
+        except Exception as count_error:
+            logger.error("stats_count_error", error=str(count_error))
+            torah_verses_count = 0
+            cached_searches_count = 0
+            total_searches_count = 0
+            formatted_searches = []
+        
+        stats = {
+            'torah_verses': torah_verses_count,
+            'cached_searches': cached_searches_count,
+            'total_searches': total_searches_count,
+            'recent_searches': formatted_searches
+        }
         
         return jsonify(stats)
         
