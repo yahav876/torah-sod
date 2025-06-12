@@ -79,6 +79,13 @@ def search():
         
         # Record statistics
         try:
+            # Log that we're about to record statistics
+            logger.info("recording_search_stats", 
+                        phrase=phrase, 
+                        word_count=word_count,
+                        search_time=result.get('search_time', 0),
+                        results_count=result.get('total_variants', 0))
+            
             stats = SearchStatistics(
                 search_phrase=phrase,
                 word_count=word_count,
@@ -90,8 +97,15 @@ def search():
             )
             db.session.add(stats)
             db.session.commit()
+            
+            # Log success and the ID of the newly created record
+            logger.info("search_stats_recorded", 
+                        phrase=phrase, 
+                        stats_id=stats.id,
+                        created_at=stats.created_at.isoformat())
+            
         except Exception as e:
-            logger.error("stats_recording_error", error=str(e))
+            logger.error("stats_recording_error", error=str(e), exc_info=True)
         
         return jsonify(result)
         
@@ -206,6 +220,13 @@ def search_stream():
             
             # Record statistics
             try:
+                # Log that we're about to record statistics
+                logger.info("recording_stream_search_stats", 
+                            phrase=phrase, 
+                            word_count=len(phrase.split()),
+                            search_time=final_result.get('search_time', 0),
+                            results_count=final_result.get('total_variants', 0))
+                
                 word_count = len(phrase.split())
                 stats = SearchStatistics(
                     search_phrase=phrase,
@@ -218,8 +239,15 @@ def search_stream():
                 )
                 db.session.add(stats)
                 db.session.commit()
+                
+                # Log success and the ID of the newly created record
+                logger.info("stream_search_stats_recorded", 
+                            phrase=phrase, 
+                            stats_id=stats.id,
+                            created_at=stats.created_at.isoformat())
+                
             except Exception as e:
-                logger.error("stats_recording_error", error=str(e))
+                logger.error("stream_stats_recording_error", error=str(e), exc_info=True)
         
         return Response(
             generate(), 
@@ -306,6 +334,37 @@ def search_live():
                     # Always use in-memory search
                     with SearchService() as search_service:
                         final_result = search_service.search(phrase, use_cache=False, partial_results_callback=partial_results_callback, is_memory_search=True)
+                
+                # Record statistics for the completed search
+                try:
+                    # Log that we're about to record statistics
+                    logger.info("recording_live_search_stats", 
+                                phrase=phrase, 
+                                word_count=len(phrase.split()),
+                                search_time=final_result.get('search_time', 0),
+                                results_count=final_result.get('total_variants', 0))
+                    
+                    word_count = len(phrase.split())
+                    stats = SearchStatistics(
+                        search_phrase=phrase,
+                        word_count=word_count,
+                        search_time=final_result.get('search_time', 0),
+                        results_count=final_result.get('total_variants', 0),
+                        cache_hit=False,
+                        client_ip=get_remote_address(),
+                        user_agent=request.headers.get('User-Agent', '')
+                    )
+                    db.session.add(stats)
+                    db.session.commit()
+                    
+                    # Log success and the ID of the newly created record
+                    logger.info("live_search_stats_recorded", 
+                                phrase=phrase, 
+                                stats_id=stats.id,
+                                created_at=stats.created_at.isoformat())
+                    
+                except Exception as e:
+                    logger.error("live_stats_recording_error", error=str(e), exc_info=True)
                 
                 # Store final result
                 final_state = {
