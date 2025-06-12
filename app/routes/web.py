@@ -2284,6 +2284,7 @@ def get_admin_template():
             <h2>ניהול מטמון</h2>
             <p>ניקוי המטמון ימחק את כל תוצאות החיפוש השמורות ויאלץ את המערכת לחשב אותן מחדש.</p>
             <button id="clearCacheBtn" class="admin-btn">נקה את המטמון</button>
+            <button id="addTestStatsBtn" class="admin-btn" style="background: #27ae60; margin-right: 10px;">הוסף נתוני בדיקה</button>
             <div id="cacheStatus" style="margin-top: 10px;"></div>
         </div>
         
@@ -2315,6 +2316,11 @@ def get_admin_template():
             // Set up clear cache button handler
             document.getElementById('clearCacheBtn').addEventListener('click', function() {
                 clearCache();
+            });
+            
+            // Set up add test stats button handler
+            document.getElementById('addTestStatsBtn').addEventListener('click', function() {
+                addTestStats();
             });
             
             // Load statistics
@@ -2351,6 +2357,39 @@ def get_admin_template():
             } catch (error) {
                 console.error('Error clearing cache:', error);
                 statusDiv.innerHTML = '<div style="color: #e74c3c;">שגיאה בניקוי המטמון: ' + error.message + '</div>';
+            }
+        }
+        
+        // Function to add test statistics data
+        async function addTestStats() {
+            if (!confirm('האם אתה בטוח שברצונך להוסיף נתוני בדיקה? פעולה זו תיצור נתוני סטטיסטיקה לצורך בדיקה.')) {
+                return;
+            }
+            
+            const statusDiv = document.getElementById('cacheStatus');
+            statusDiv.innerHTML = '<div style="color: #3498db;">מוסיף נתוני בדיקה...</div>';
+            
+            try {
+                const response = await fetch('/api/admin/add-test-stats', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = '<div style="color: #2ecc71;">נתוני בדיקה נוספו בהצלחה!</div>';
+                    // Reload stats after adding test data
+                    loadStats();
+                } else {
+                    statusDiv.innerHTML = '<div style="color: #e74c3c;">שגיאה בהוספת נתוני בדיקה: ' + (data.error || 'שגיאה לא ידועה') + '</div>';
+                }
+                
+            } catch (error) {
+                console.error('Error adding test stats:', error);
+                statusDiv.innerHTML = '<div style="color: #e74c3c;">שגיאה בהוספת נתוני בדיקה: ' + error.message + '</div>';
             }
         }
         

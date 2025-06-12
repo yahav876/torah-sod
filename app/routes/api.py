@@ -692,6 +692,72 @@ def performance_stats():
         }), 500
 
 
+@bp.route('/admin/add-test-stats', methods=['POST'])
+def add_test_stats():
+    """Add test statistics data to the database for testing purposes."""
+    # Check if user is logged in
+    from flask import session
+    if 'logged_in' not in session:
+        return jsonify({
+            'success': False,
+            'error': 'Authentication required'
+        }), 401
+    
+    try:
+        import datetime
+        from app.models.database import db, SearchStatistics, SearchResult
+        
+        # Add some test search statistics
+        for i in range(10):
+            # Create statistics for searches over the past few days
+            days_ago = i % 3  # Some today, some yesterday, some day before
+            timestamp = datetime.datetime.now() - datetime.timedelta(days=days_ago)
+            
+            stat = SearchStatistics(
+                search_phrase=f"Test search {i}",
+                word_count=i + 1,
+                search_time=0.5 + (i * 0.1),  # Varying search times
+                results_count=i * 5,
+                cache_hit=(i % 2 == 0),  # Alternate between cache hit and miss
+                client_ip="127.0.0.1",
+                user_agent="Test Script",
+                created_at=timestamp
+            )
+            db.session.add(stat)
+        
+        # Add some test search results (cached searches)
+        for i in range(5):
+            result = SearchResult(
+                search_phrase=f"Cached search {i}",
+                search_hash=f"hash_{i}",
+                results_json='{"success": true, "results": []}',
+                total_variants=i * 3,
+                search_time=0.3 + (i * 0.2),
+                hit_count=i + 1,
+                last_accessed=datetime.datetime.now()
+            )
+            db.session.add(result)
+        
+        # Commit the changes
+        db.session.commit()
+        
+        logger.info("test_stats_added", count=15)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Test statistics data added successfully',
+            'stats_added': 10,
+            'cache_entries_added': 5
+        })
+        
+    except Exception as e:
+        logger.error("add_test_stats_error", error=str(e))
+        return jsonify({
+            'success': False,
+            'error': f'Failed to add test statistics: {str(e)}'
+        }), 500
+
+
 @bp.route('/admin/build-index', methods=['POST'])
 def build_search_index():
     """Build the word-level search index for ultra-fast searches."""
