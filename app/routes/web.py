@@ -2366,86 +2366,52 @@ def get_admin_template():
                 document.getElementById('todaySearches').textContent = 'Loading...';
                 document.getElementById('avgSearchTime').textContent = 'Loading...';
                 
-                // Add debug info to the page
-                const debugDiv = document.createElement('div');
-                debugDiv.id = 'statsDebug';
-                debugDiv.style.marginTop = '20px';
-                debugDiv.style.padding = '10px';
-                debugDiv.style.background = '#f8f9fa';
-                debugDiv.style.borderRadius = '5px';
-                debugDiv.style.fontSize = '12px';
-                debugDiv.style.fontFamily = 'monospace';
-                debugDiv.style.whiteSpace = 'pre-wrap';
-                debugDiv.style.overflow = 'auto';
-                debugDiv.style.maxHeight = '200px';
-                
-                // Replace existing debug div if it exists
-                const existingDebug = document.getElementById('statsDebug');
-                if (existingDebug) {
-                    existingDebug.parentNode.removeChild(existingDebug);
-                }
-                
-                document.querySelector('.stats-grid').parentNode.appendChild(debugDiv);
-                
-                debugDiv.textContent = `Fetching stats at ${new Date().toISOString()}...\n`;
+                // Log to console only for debugging
+                console.log(`Fetching stats at ${new Date().toISOString()}...`);
                 
                 const response = await fetch(`/api/stats?_=${timestamp}`);
                 const data = await response.json();
                 
-                debugDiv.textContent += `Response received: ${JSON.stringify(data, null, 2)}\n`;
+                // Log to console only
                 console.log("Loaded statistics:", data);
                 
                 if (data) {
+                    // Update the UI with the statistics
                     document.getElementById('totalSearches').textContent = data.total_searches || 0;
                     document.getElementById('cachedResults').textContent = data.cached_searches || 0;
-                    
-                    debugDiv.textContent += `Total searches: ${data.total_searches || 0}\n`;
-                    debugDiv.textContent += `Cached searches: ${data.cached_searches || 0}\n`;
-                    debugDiv.textContent += `Recent searches: ${data.recent_searches ? data.recent_searches.length : 0}\n`;
-                    
-                    if (data.recent_searches) {
-                        debugDiv.textContent += `Recent search details:\n${JSON.stringify(data.recent_searches, null, 2)}\n`;
-                    }
                     
                     // Calculate today's searches
                     const todaySearches = data.recent_searches ? 
                         data.recent_searches.filter(s => {
                             const searchDate = new Date(s.timestamp);
                             const today = new Date();
-                            debugDiv.textContent += `Search date: ${searchDate.toDateString()}, Today: ${today.toDateString()}, Match: ${searchDate.toDateString() === today.toDateString()}\n`;
                             return searchDate.toDateString() === today.toDateString();
                         }).length : 0;
                     
                     document.getElementById('todaySearches').textContent = todaySearches;
-                    debugDiv.textContent += `Today's searches: ${todaySearches}\n`;
                     
                     // Calculate average search time
                     if (data.recent_searches && data.recent_searches.length > 0) {
                         const avgTime = data.recent_searches.reduce((sum, s) => sum + s.time, 0) / data.recent_searches.length;
                         document.getElementById('avgSearchTime').textContent = avgTime.toFixed(2) + 's';
-                        debugDiv.textContent += `Average search time: ${avgTime.toFixed(2)}s\n`;
                     } else {
                         document.getElementById('avgSearchTime').textContent = '0s';
-                        debugDiv.textContent += `Average search time: 0s (no recent searches)\n`;
                     }
-                } else {
-                    debugDiv.textContent += `No data received from API\n`;
                 }
                 
                 // Set up auto-refresh for statistics every 30 seconds
-                debugDiv.textContent += `Next refresh scheduled in 30 seconds\n`;
                 setTimeout(loadStats, 30000);
                 
             } catch (error) {
                 console.error('Error loading stats:', error);
                 
-                // Show error in debug div
-                const debugDiv = document.getElementById('statsDebug');
-                if (debugDiv) {
-                    debugDiv.textContent += `Error loading stats: ${error.message}\n`;
-                }
+                // Update UI to show error state
+                document.getElementById('totalSearches').textContent = '0';
+                document.getElementById('cachedResults').textContent = '0';
+                document.getElementById('todaySearches').textContent = '0';
+                document.getElementById('avgSearchTime').textContent = '0s';
                 
-                // Even if there's an error, try again after 30 seconds
+                // Try again after 30 seconds
                 setTimeout(loadStats, 30000);
             }
         }
