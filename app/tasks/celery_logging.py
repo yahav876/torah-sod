@@ -12,8 +12,24 @@ def setup_celery_logging():
     logs_dir = '/app/logs'
     os.makedirs(logs_dir, exist_ok=True)
     
+    # Ensure the logs directory has the correct permissions
+    try:
+        os.chmod(logs_dir, 0o777)  # Full permissions for all users
+    except Exception as e:
+        print(f"Warning: Could not set permissions on logs directory: {e}")
+    
     # Configure file handler for Celery logs
     log_file_path = os.path.join(logs_dir, 'celery-worker.log')
+    
+    # Create the log file if it doesn't exist and set permissions
+    if not os.path.exists(log_file_path):
+        try:
+            with open(log_file_path, 'a'):
+                pass
+            os.chmod(log_file_path, 0o666)  # Read/write for all users
+        except Exception as e:
+            print(f"Warning: Could not create or set permissions on log file: {e}")
+    
     file_handler = RotatingFileHandler(
         log_file_path,
         maxBytes=10 * 1024 * 1024,  # 10 MB
