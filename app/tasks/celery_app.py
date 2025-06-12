@@ -4,6 +4,7 @@ Celery application configuration
 from celery import Celery
 from app.config.settings import get_config
 import os
+from app.tasks.celery_logging import setup_celery_logging
 
 # Get configuration
 config = get_config(os.environ.get('FLASK_ENV', 'development'))
@@ -31,3 +32,6 @@ celery.conf.update(
 
 # Auto-discover tasks
 celery.autodiscover_tasks(['app.tasks'])
+
+# Set up logging for Celery
+setup_celery_logging()

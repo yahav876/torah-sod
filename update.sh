@@ -7,6 +7,10 @@ docker compose -f docker-compose.aws.yml down
 docker stop torah-sod-torah-search-1 || true
 docker rm torah-sod-torah-search-1 || true
 
+# Create logs directory structure
+echo "Creating logs directory structure..."
+./create_logs_dir.sh
+
 echo "Building and starting new containers with no cache to apply all changes..."
 docker compose -f docker-compose.aws.yml build --no-cache
 docker compose -f docker-compose.aws.yml up -d

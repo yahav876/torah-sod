@@ -3,9 +3,11 @@ Logging configuration for Torah Search application
 """
 import logging
 import sys
+import os
 import structlog
 from flask import has_request_context, request
 import time
+from logging.handlers import RotatingFileHandler
 
 
 def add_request_context(logger, method_name, event_dict):
@@ -43,12 +45,36 @@ def setup_logging(app):
     # Set up Flask logging
     log_level = getattr(logging, app.config.get('LOG_LEVEL', 'INFO'))
     
-    # Configure root logger
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stdout,
-        level=log_level,
+    # Create logs directory if it doesn't exist
+    logs_dir = '/app/logs'
+    os.makedirs(logs_dir, exist_ok=True)
+    
+    # Configure file handler
+    log_file_path = os.path.join(logs_dir, 'torah-search.log')
+    file_handler = RotatingFileHandler(
+        log_file_path,
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=10
     )
+    file_handler.setFormatter(logging.Formatter('%(message)s'))
+    file_handler.setLevel(log_level)
+    
+    # Configure root logger with both stdout and file handlers
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    # Remove existing handlers and add our handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Add stdout handler
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(logging.Formatter('%(message)s'))
+    stdout_handler.setLevel(log_level)
+    root_logger.addHandler(stdout_handler)
+    
+    # Add file handler
+    root_logger.addHandler(file_handler)
     
     # Disable some noisy loggers
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
@@ -56,6 +82,10 @@ def setup_logging(app):
     
     # Create app logger
     app.logger.setLevel(log_level)
+    for handler in app.logger.handlers[:]:
+        app.logger.removeHandler(handler)
+    app.logger.addHandler(file_handler)
+    app.logger.addHandler(stdout_handler)
     
     # Log startup
     logger = structlog.get_logger()

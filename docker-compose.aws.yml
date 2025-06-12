@@ -21,6 +21,12 @@ services:
     volumes:
       - ./torah.txt:/app/torah.txt:ro
       - sqlite-data:/tmp
+      - ./logs:/app/logs  # Mount logs directory to host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     restart: unless-stopped
     deploy:
       resources:
@@ -52,6 +58,12 @@ services:
     volumes:
       - ./torah.txt:/app/torah.txt:ro
       - sqlite-data:/tmp
+      - ./logs:/app/logs  # Mount logs directory to host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     restart: unless-stopped
     deploy:
       resources:
@@ -69,8 +81,14 @@ services:
     volumes:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./app/static/favicon.ico:/usr/share/nginx/html/favicon.ico:ro
+      - ./logs/nginx:/var/log/nginx  # Mount nginx logs directory to host
     depends_on:
       - tzfanim-search
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     restart: unless-stopped
     networks:
       - tzfanim-network

@@ -10,8 +10,14 @@ services:
       - ./docker/nginx-dynamic.conf:/etc/nginx/nginx.conf:ro
       - ./app/static:/app/static:ro
       - ./favicon.ico:/usr/share/nginx/html/favicon.ico:ro
+      - ./logs/nginx:/var/log/nginx  # Mount nginx logs directory to host
     depends_on:
       - tzfanim-search
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     networks:
       - torah-network
     restart: unless-stopped
@@ -43,6 +49,12 @@ services:
     volumes:
       - ./torah.txt:/app/torah.txt:ro
       - sqlite-data:/tmp
+      - ./logs:/app/logs  # Mount logs directory to host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     networks:
       - torah-network
     deploy:
@@ -63,6 +75,12 @@ services:
     command: redis-server --maxmemory 4gb --maxmemory-policy allkeys-lru --save 900 1 --save 300 10 --save 60 10000
     volumes:
       - redis-data:/data
+      - ./logs/redis:/var/log/redis  # Mount redis logs directory to host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     networks:
       - torah-network
     restart: unless-stopped
@@ -91,6 +109,12 @@ services:
     volumes:
       - ./torah.txt:/app/torah.txt:ro
       - sqlite-data:/tmp
+      - ./logs:/app/logs  # Mount logs directory to host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     depends_on:
       - redis
     networks:

@@ -11,6 +11,10 @@ if command -v docker-compose &> /dev/null; then
     
     # Use the docker-compose file
     if [ -f "docker-compose.aws.yml" ]; then
+        # Create logs directory structure
+        echo "Creating logs directory structure..."
+        ./create_logs_dir.sh
+        
         echo "Starting all services..."
         docker-compose -f docker-compose.aws.yml up -d
         
