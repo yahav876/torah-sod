@@ -1800,13 +1800,6 @@ def get_main_template():
                 for (let i = 0; i < originalSearchResults.results.length; i++) {
                     const originalResult = originalSearchResults.results[i];
                     
-                    // Debug
-                    console.log(`Processing result ${i}:`, {
-                        variant: originalResult.variant,
-                        sources: originalResult.sources,
-                        locationsCount: originalResult.locations.length
-                    });
-                    
                     // Check if any of the result's sources are in the selected sources
                     const hasSelectedSource = originalResult.sources.some(source => 
                         selectedSources.includes(source)
@@ -1814,7 +1807,6 @@ def get_main_template():
                     
                     // Skip if none of the result's sources are selected
                     if (!hasSelectedSource) {
-                        console.log(`Result ${i} skipped: no matching sources`);
                         continue;
                     }
                     
@@ -1822,8 +1814,6 @@ def get_main_template():
                     const filteredLocations = originalResult.locations.filter(location => 
                         selectedBooks.includes(location.book)
                     );
-                    
-                    console.log(`Result ${i} filtered locations:`, filteredLocations.length);
                     
                     // Only add the result if it has matching locations
                     if (filteredLocations.length > 0) {
@@ -1841,29 +1831,21 @@ def get_main_template():
                 // Update total variants count
                 filteredData.total_variants = filteredData.results.length;
                 
-                console.log("Filtered results:", {
-                    totalResults: filteredData.results.length,
-                    firstResult: filteredData.results.length > 0 ? {
-                        variant: filteredData.results[0].variant,
-                        locationsCount: filteredData.results[0].locations.length
-                    } : null
-                });
+                // Display the filtered results
+                renderResults(filteredData);
                 
-            // Display the filtered results
-            renderResults(filteredData);
-            
-            // Update stats
-            const statsDiv = document.querySelector('.stats');
-            if (statsDiv) {
-                statsDiv.innerHTML = `<strong>נמצאו ${filteredData.results.length} וריאציות</strong> (מתוך ${originalSearchResults.total_variants} סך הכל)<br>`;
-                statsDiv.innerHTML += `סינון: ${selectedBooks.length} ספרים, ${selectedSources.length} מקורות`;
-            }
-            
-            // Check if we need to show the "Back to Previous Results" button
-            checkAndShowBackButton();
-            
-            // Show the results controls
-            document.getElementById('resultsControls').style.display = 'block';
+                // Update stats
+                const statsDiv = document.querySelector('.stats');
+                if (statsDiv) {
+                    statsDiv.innerHTML = `<strong>נמצאו ${filteredData.results.length} וריאציות</strong> (מתוך ${originalSearchResults.total_variants} סך הכל)<br>`;
+                    statsDiv.innerHTML += `סינון: ${selectedBooks.length} ספרים, ${selectedSources.length} מקורות`;
+                }
+                
+                // Check if we need to show the "Back to Previous Results" button
+                checkAndShowBackButton();
+                
+                // Show the results controls
+                document.getElementById('resultsControls').style.display = 'block';
             } catch (error) {
                 console.error("Error applying filters:", error);
                 document.getElementById('results').innerHTML = 
