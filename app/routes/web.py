@@ -679,6 +679,7 @@ def get_main_template():
             <div class="search-context-options">
                 <button id="searchInVerse" class="search-context-option">חפש בפסוק</button>
                 <button id="searchInChapter" class="search-context-option">חפש בפרק</button>
+                <button id="backToResults" class="search-context-option" style="background-color: #e67e22;">חזור לתוצאות</button>
             </div>
             <button id="closeContextModal" class="search-context-close">סגור</button>
         </div>
@@ -1532,6 +1533,12 @@ def get_main_template():
             
             document.getElementById('searchInChapter').onclick = function() {
                 performContextSearch(variantText, 'chapter', book, chapter, verse);
+                modal.style.display = 'none';
+            };
+            
+            document.getElementById('backToResults').onclick = function() {
+                // Just close the modal without performing a new search
+                // This will effectively return to the current search results
                 modal.style.display = 'none';
             };
             
