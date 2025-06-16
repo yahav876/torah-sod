@@ -96,7 +96,9 @@ class SearchService:
             
             # Perform search
             start_time = time.time()
-            results = self._perform_search(clean_phrase, partial_results_callback, is_memory_search=is_memory_search)
+            # Pass the book filter to _perform_search if it exists
+            filter_book = filters.get('book')
+            results = self._perform_search(clean_phrase, partial_results_callback, is_memory_search=is_memory_search, filter_book=filter_book)
             
             # Apply filters if any
             if filters:
@@ -140,7 +142,7 @@ class SearchService:
                 'results': []
             }
     
-    def _perform_search(self, phrase, partial_results_callback=None, is_memory_search=False):
+    def _perform_search(self, phrase, partial_results_callback=None, is_memory_search=False, filter_book=None):
         """Perform the actual search."""
         # Get Torah text
         lines = self.torah_service.get_torah_lines()
@@ -148,6 +150,26 @@ class SearchService:
         
         if not lines:
             raise ValueError("Torah text not loaded")
+        
+        # If a book filter is specified, filter the lines to only include that book
+        if filter_book:
+            logger.info("filtering_lines_by_book", book=filter_book)
+            # Group lines by book
+            book_lines = self._group_lines_by_book(lines)
+            
+            # Check if the specified book exists in our grouped lines
+            if filter_book in book_lines:
+                # Use only the lines for the specified book
+                lines = book_lines[filter_book]
+                logger.info("filtered_lines_count", book=filter_book, count=len(lines))
+            else:
+                logger.warning("book_not_found_in_grouped_lines", book=filter_book)
+                # Try a more flexible approach to find the book
+                for book_name, book_content in book_lines.items():
+                    if book_name.startswith(filter_book) or filter_book.startswith(book_name):
+                        lines = book_content
+                        logger.info("found_similar_book", requested=filter_book, found=book_name, count=len(lines))
+                        break
         
         # Check if this is a multi-word search
         words = phrase.strip().split()
@@ -359,8 +381,15 @@ class SearchService:
         current_book = None
         current_lines = []
         
-        # Define the Torah books we're looking for
-        torah_books = ['בראשית', 'שמות', 'ויקרא', 'במדבר', 'דברים']
+        # Define all the books we're looking for
+        all_books = [
+            "בראשית", "שמות", "ויקרא", "במדבר", "דברים",
+            "יהושע", "שופטים", "שמואל א", "שמואל ב", "מלכים א", "מלכים ב",
+            "ישעיה", "ירמיה", "יחזקאל", "הושע", "יואל", "עמוס", "עובדיה", "יונה",
+            "מיכה", "נחום", "חבקוק", "צפניה", "חגי", "זכריה", "מלאכי",
+            "תהילים", "משלי", "איוב", "שיר השירים", "רות", "איכה", "קהלת",
+            "אסתר", "דניאל", "עזרא", "נחמיה", "דברי הימים א", "דברי הימים ב"
+        ]
         
         for line in lines:
             line = line.strip()
@@ -373,7 +402,7 @@ class SearchService:
             if match:
                 book_name = match.group(1)
             else:
-                for book in torah_books:
+                for book in all_books:
                     if line.startswith(book):
                         book_name = book
                         break
