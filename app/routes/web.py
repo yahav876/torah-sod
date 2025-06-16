@@ -1643,14 +1643,42 @@ def get_main_template():
                 results: []
             };
             
+            // Debug logging
+            console.log("Selected sources:", selectedSources);
+            console.log("Selected books:", selectedBooks);
+            console.log("Original results count:", originalSearchResults.results.length);
+            
             // Apply filters to each result
             for (let i = 0; i < originalSearchResults.results.length; i++) {
                 const originalResult = originalSearchResults.results[i];
                 
+                // Debug logging for this result
+                console.log(`Result ${i} sources:`, originalResult.sources);
+                
                 // Check if any of the result's sources are in the selected sources
-                const hasSelectedSource = originalResult.sources.some(source => 
-                    selectedSources.includes(source)
-                );
+                // Use a more flexible matching approach
+                const hasSelectedSource = originalResult.sources.some(source => {
+                    // Try to find a match in the selected sources
+                    return selectedSources.some(selectedSource => {
+                        // Normalize strings for comparison (remove special characters)
+                        const normalizedSource = source.replace(/[^\u0590-\u05FF\w-]/g, '');
+                        const normalizedSelected = selectedSource.replace(/[^\u0590-\u05FF\w-]/g, '');
+                        
+                        // Check for exact match after normalization
+                        if (normalizedSource === normalizedSelected) {
+                            return true;
+                        }
+                        
+                        // Check if one contains the other
+                        if (source.includes(selectedSource) || selectedSource.includes(source)) {
+                            return true;
+                        }
+                        
+                        return false;
+                    });
+                });
+                
+                console.log(`Result ${i} has selected source:`, hasSelectedSource);
                 
                 // Skip if none of the result's sources are selected
                 if (!hasSelectedSource) {
@@ -1658,9 +1686,23 @@ def get_main_template():
                 }
                 
                 // Filter locations by selected books
-                const filteredLocations = originalResult.locations.filter(location => 
-                    selectedBooks.includes(location.book)
-                );
+                const filteredLocations = originalResult.locations.filter(location => {
+                    return selectedBooks.some(book => {
+                        // Exact match
+                        if (location.book === book) {
+                            return true;
+                        }
+                        
+                        // Check if one contains the other
+                        if (location.book.includes(book) || book.includes(location.book)) {
+                            return true;
+                        }
+                        
+                        return false;
+                    });
+                });
+                
+                console.log(`Result ${i} filtered locations count:`, filteredLocations.length);
                 
                 // Only add the result if it has matching locations
                 if (filteredLocations.length > 0) {
@@ -1672,11 +1714,13 @@ def get_main_template():
                     };
                     
                     filteredData.results.push(filteredResult);
+                    console.log(`Added result ${i} to filtered data`);
                 }
             }
             
             // Update total variants count
             filteredData.total_variants = filteredData.results.length;
+            console.log("Filtered results count:", filteredData.results.length);
             
             // Display the filtered results
             renderResults(filteredData);
