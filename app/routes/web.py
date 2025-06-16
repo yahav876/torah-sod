@@ -827,15 +827,15 @@ def get_main_template():
                 if (filtersContent.style.display === 'none') {
                     filtersContent.style.display = 'block';
                     
-                    // Populate the pre-search book filter if it's empty
-                    const preSearchBookFilter = document.getElementById('preSearchBookFilter');
-                    if (preSearchBookFilter.innerHTML === '<div style="text-align: center; color: #7f8c8d;">טוען...</div>') {
-                        populatePreSearchBookFilter();
-                    }
+                    // Always populate the pre-search book filter when showing
+                    populatePreSearchBookFilter();
                 } else {
                     filtersContent.style.display = 'none';
                 }
             });
+            
+            // Initialize the pre-search book filter on page load
+            populatePreSearchBookFilter();
             
             // Check if we need to show the "Back to Previous Results" button
             checkAndShowBackButton();
