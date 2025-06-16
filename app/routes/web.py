@@ -696,7 +696,6 @@ def get_main_template():
             <div class="search-context-options">
                 <button id="searchLocationVerse" class="search-context-option">חפש בפסוק</button>
                 <button id="searchLocationChapter" class="search-context-option">חפש בפרק</button>
-                <button id="backToPreviousResultsBtn" class="search-context-option" style="background-color: #e67e22;">חזור לתוצאות הקודמות</button>
             </div>
             <button id="closeLocationModal" class="search-context-close">סגור</button>
         </div>
@@ -1320,7 +1319,20 @@ def get_main_template():
             // Show the filters section
             document.getElementById('filtersSection').style.display = 'block';
             
-            let html = '<div class="stats">';
+            let html = '';
+            
+            // Check if this is a context search (contains book: or chapter: or verse:)
+            const isContextSearch = data.input_phrase && 
+                (data.input_phrase.includes('book:') || 
+                 data.input_phrase.includes('chapter:') || 
+                 data.input_phrase.includes('verse:'));
+            
+            // If this is a context search, add a "Back to Previous Results" button
+            if (isContextSearch && sessionStorage.getItem('previousSearchResults')) {
+                html += '<button id="backToPreviousResults" class="control-btn" style="background-color: #e67e22; margin-bottom: 20px; font-size: 18px; padding: 15px 30px; display: block; margin: 0 auto 20px auto;">חזור לתוצאות הקודמות</button>';
+            }
+            
+            html += '<div class="stats">';
             html += '<strong>נמצאו ' + data.total_variants + ' וריאציות</strong><br>';
             html += 'זמן חיפוש: ' + data.search_time + ' שניות';
             html += '</div>';
@@ -1429,6 +1441,28 @@ def get_main_template():
             // Set up filter buttons
             document.getElementById('applyFiltersBtn').addEventListener('click', applyFilters);
             document.getElementById('resetFiltersBtn').addEventListener('click', resetFilters);
+            
+            // Set up "Back to Previous Results" button if it exists
+            const backButton = document.getElementById('backToPreviousResults');
+            if (backButton) {
+                backButton.addEventListener('click', function() {
+                    console.log("Back button clicked");
+                    // Get the previous search results from session storage
+                    const previousResults = JSON.parse(sessionStorage.getItem('previousSearchResults'));
+                    if (previousResults) {
+                        console.log("Displaying previous results");
+                        // Display the previous search results
+                        displayResults(previousResults);
+                        
+                        // Clear the session storage
+                        sessionStorage.removeItem('previousSearchResults');
+                        sessionStorage.removeItem('isPreviousSearch');
+                        
+                        // Remove the back button
+                        this.remove();
+                    }
+                });
+            }
         }
         
         // Function to toggle variant expansion/collapse
