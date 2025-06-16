@@ -696,6 +696,7 @@ def get_main_template():
             <div class="search-context-options">
                 <button id="searchLocationVerse" class="search-context-option">חפש בפסוק</button>
                 <button id="searchLocationChapter" class="search-context-option">חפש בפרק</button>
+                <button id="backToPreviousResultsBtn" class="search-context-option" style="background-color: #e67e22;">חזור לתוצאות הקודמות</button>
             </div>
             <button id="closeLocationModal" class="search-context-close">סגור</button>
         </div>
@@ -1573,10 +1574,13 @@ def get_main_template():
         
         // Function to check if we need to show the "Back to Previous Results" button
         function checkAndShowBackButton() {
+            console.log("Checking for previous search results...");
             // Check if we have previous search results in session storage
             const hasPreviousResults = sessionStorage.getItem('isPreviousSearch') === 'true';
+            console.log("Has previous results:", hasPreviousResults);
             
             if (hasPreviousResults) {
+                console.log("Creating back button...");
                 // Create the back button if it doesn't exist
                 let backButton = document.getElementById('backToPreviousResults');
                 if (!backButton) {
@@ -1585,13 +1589,17 @@ def get_main_template():
                     backButton.className = 'control-btn';
                     backButton.style.backgroundColor = '#e67e22';
                     backButton.style.marginBottom = '20px';
+                    backButton.style.fontSize = '18px';
+                    backButton.style.padding = '15px 30px';
                     backButton.textContent = 'חזור לתוצאות הקודמות';
                     
                     // Add click event listener
                     backButton.addEventListener('click', function() {
+                        console.log("Back button clicked");
                         // Get the previous search results from session storage
                         const previousResults = JSON.parse(sessionStorage.getItem('previousSearchResults'));
                         if (previousResults) {
+                            console.log("Displaying previous results");
                             // Display the previous search results
                             displayResults(previousResults);
                             
@@ -1606,7 +1614,13 @@ def get_main_template():
                     
                     // Insert the back button at the top of the results
                     const resultsDiv = document.getElementById('results');
-                    resultsDiv.insertBefore(backButton, resultsDiv.firstChild);
+                    if (resultsDiv.firstChild) {
+                        resultsDiv.insertBefore(backButton, resultsDiv.firstChild);
+                    } else {
+                        resultsDiv.appendChild(backButton);
+                    }
+                    
+                    console.log("Back button created and inserted");
                 }
             }
         }
@@ -1933,6 +1947,26 @@ def get_main_template():
                     modal.style.display = 'none';
                 } else {
                     alert('אנא הכנס מילה או ביטוי לחיפוש');
+                }
+            };
+            
+            document.getElementById('backToPreviousResultsBtn').onclick = function() {
+                // Get the previous search results from session storage
+                const previousResults = JSON.parse(sessionStorage.getItem('previousSearchResults'));
+                if (previousResults) {
+                    console.log("Displaying previous results from modal");
+                    // Display the previous search results
+                    displayResults(previousResults);
+                    
+                    // Clear the session storage
+                    sessionStorage.removeItem('previousSearchResults');
+                    sessionStorage.removeItem('isPreviousSearch');
+                    
+                    // Close the modal
+                    modal.style.display = 'none';
+                } else {
+                    // If no previous results, just close the modal
+                    modal.style.display = 'none';
                 }
             };
             
