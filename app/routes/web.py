@@ -1658,20 +1658,35 @@ def get_main_template():
                 // Check if any of the result's sources are in the selected sources
                 // Use a more flexible matching approach
                 const hasSelectedSource = originalResult.sources.some(source => {
+                    // Make sure source is a string
+                    const sourceStr = String(source);
+                    
                     // Try to find a match in the selected sources
                     return selectedSources.some(selectedSource => {
-                        // Normalize strings for comparison (remove special characters)
-                        const normalizedSource = source.replace(/[^\u0590-\u05FF\w-]/g, '');
-                        const normalizedSelected = selectedSource.replace(/[^\u0590-\u05FF\w-]/g, '');
+                        // Make sure selectedSource is a string
+                        const selectedSourceStr = String(selectedSource);
                         
-                        // Check for exact match after normalization
-                        if (normalizedSource === normalizedSelected) {
+                        // Simple direct comparison first
+                        if (sourceStr === selectedSourceStr) {
                             return true;
                         }
                         
                         // Check if one contains the other
-                        if (source.includes(selectedSource) || selectedSource.includes(source)) {
+                        if (sourceStr.includes(selectedSourceStr) || selectedSourceStr.includes(sourceStr)) {
                             return true;
+                        }
+                        
+                        // Try to normalize strings for comparison (safely)
+                        try {
+                            const normalizedSource = sourceStr.replace(/[^\u0590-\u05FF\w-]/g, '');
+                            const normalizedSelected = selectedSourceStr.replace(/[^\u0590-\u05FF\w-]/g, '');
+                            
+                            // Check for exact match after normalization
+                            if (normalizedSource === normalizedSelected) {
+                                return true;
+                            }
+                        } catch (e) {
+                            console.error("Error normalizing strings:", e, "Source:", sourceStr, "Selected:", selectedSourceStr);
                         }
                         
                         return false;
@@ -1687,14 +1702,20 @@ def get_main_template():
                 
                 // Filter locations by selected books
                 const filteredLocations = originalResult.locations.filter(location => {
+                    // Make sure location.book is a string
+                    const locationBook = String(location.book || '');
+                    
                     return selectedBooks.some(book => {
+                        // Make sure book is a string
+                        const bookStr = String(book || '');
+                        
                         // Exact match
-                        if (location.book === book) {
+                        if (locationBook === bookStr) {
                             return true;
                         }
                         
                         // Check if one contains the other
-                        if (location.book.includes(book) || book.includes(location.book)) {
+                        if (locationBook.includes(bookStr) || bookStr.includes(locationBook)) {
                             return true;
                         }
                         
