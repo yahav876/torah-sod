@@ -1267,16 +1267,8 @@ def get_main_template():
             // Reset pagination to first page
             currentPage = 1;
             
-            // Set results per page based on total results
-            if (data.results.length <= 10) {
-                resultsPerPage = 10;
-            } else if (data.results.length <= 25) {
-                resultsPerPage = 25;
-            } else if (data.results.length <= 50) {
-                resultsPerPage = 50;
-            } else {
-                resultsPerPage = 100;
-            }
+            // Always set results per page to 10 by default
+            resultsPerPage = 10;
             
             // Calculate total pages
             totalPages = Math.ceil(data.results.length / resultsPerPage);
@@ -1912,8 +1904,6 @@ def get_main_template():
                         if (currentPage > 1) {
                             currentPage--;
                             renderResults(data);
-                            // Scroll to top after page change
-                            window.scrollTo(0, 0);
                         }
                     });
                 }
@@ -1926,8 +1916,6 @@ def get_main_template():
                         if (currentPage < totalPages) {
                             currentPage++;
                             renderResults(data);
-                            // Scroll to top after page change
-                            window.scrollTo(0, 0);
                         }
                     });
                 }
@@ -1940,8 +1928,6 @@ def get_main_template():
                     if (page !== currentPage) {
                         currentPage = page;
                         renderResults(data);
-                        // Scroll to top after page change
-                        window.scrollTo(0, 0);
                     }
                 });
             });
