@@ -644,6 +644,23 @@ def get_main_template():
                 <button id="searchBtn">חפש</button>
             </div>
             
+            <!-- Pre-search filters -->
+            <div class="pre-search-filters" style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 10px; text-align: right;">
+                <div style="font-weight: bold; margin-bottom: 10px; font-size: 18px;">הגבלת חיפוש:</div>
+                
+                <div style="margin-bottom: 15px;">
+                    <button id="togglePreSearchFilters" class="control-btn" style="background-color: #3498db;">הצג/הסתר אפשרויות סינון</button>
+                </div>
+                
+                <div id="preSearchFiltersContent" style="display: none;">
+                    <div style="font-weight: bold; margin-bottom: 5px;">חפש רק בספרים הבאים:</div>
+                    <div id="preSearchBookFilter" class="checkbox-group" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 8px; margin-bottom: 15px;">
+                        <!-- Will be populated dynamically -->
+                        <div style="text-align: center; color: #7f8c8d;">טוען...</div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="search-options">
                 <!-- Search options removed - using only in-memory search -->
                 
@@ -763,6 +780,15 @@ def get_main_template():
         let partialResults = [];
         let abortController = null;
         
+        // Define the Torah books for pre-search filtering
+        const torahBooks = [
+            "בראשית",
+            "שמות",
+            "ויקרא",
+            "במדבר",
+            "דברים"
+        ];
+        
         // Initialize all event handlers when the DOM is fully loaded
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM fully loaded, initializing event handlers');
@@ -795,9 +821,55 @@ def get_main_template():
                 collapseAllVariants();
             });
             
+            // Set up toggle for pre-search filters
+            document.getElementById('togglePreSearchFilters').addEventListener('click', function() {
+                const filtersContent = document.getElementById('preSearchFiltersContent');
+                if (filtersContent.style.display === 'none') {
+                    filtersContent.style.display = 'block';
+                    
+                    // Populate the pre-search book filter if it's empty
+                    const preSearchBookFilter = document.getElementById('preSearchBookFilter');
+                    if (preSearchBookFilter.innerHTML === '<div style="text-align: center; color: #7f8c8d;">טוען...</div>') {
+                        populatePreSearchBookFilter();
+                    }
+                } else {
+                    filtersContent.style.display = 'none';
+                }
+            });
+            
             // Check if we need to show the "Back to Previous Results" button
             checkAndShowBackButton();
         });
+        
+        // Function to populate the pre-search book filter
+        function populatePreSearchBookFilter() {
+            const preSearchBookFilter = document.getElementById('preSearchBookFilter');
+            preSearchBookFilter.innerHTML = '';
+            
+            // Add "Select All" checkbox
+            const selectAllLabel = document.createElement('label');
+            selectAllLabel.innerHTML = `<input type="checkbox" class="select-all-pre-search-books" checked> בחר הכל`;
+            selectAllLabel.style.fontWeight = 'bold';
+            selectAllLabel.style.borderBottom = '1px solid #ddd';
+            selectAllLabel.style.paddingBottom = '5px';
+            selectAllLabel.style.marginBottom = '5px';
+            preSearchBookFilter.appendChild(selectAllLabel);
+            
+            // Add individual book checkboxes
+            torahBooks.forEach(book => {
+                const label = document.createElement('label');
+                label.innerHTML = `<input type="checkbox" name="preSearchBookFilter" value="${book}" checked> ${book}`;
+                preSearchBookFilter.appendChild(label);
+            });
+            
+            // Add event listener for "Select All" checkbox
+            document.querySelector('.select-all-pre-search-books').addEventListener('change', function() {
+                const isChecked = this.checked;
+                document.querySelectorAll('input[name="preSearchBookFilter"]').forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                });
+            });
+        }
         
         // Search type toggle function removed - using only in-memory search
         
@@ -809,6 +881,28 @@ def get_main_template():
             if (!query) {
                 alert('אנא הכנס מילה או ביטוי לחיפוש');
                 return;
+            }
+            
+            // Get selected books from pre-search filter
+            let selectedBooks = [];
+            const preSearchFiltersContent = document.getElementById('preSearchFiltersContent');
+            
+            // Only apply book filters if the filter section is visible
+            if (preSearchFiltersContent.style.display !== 'none') {
+                document.querySelectorAll('input[name="preSearchBookFilter"]:checked').forEach(checkbox => {
+                    selectedBooks.push(checkbox.value);
+                });
+            }
+            
+            // Create search parameters
+            const searchParams = {
+                phrase: query,
+                search_type: searchType
+            };
+            
+            // Add book filters if any are selected (and not all books are selected)
+            if (selectedBooks.length > 0 && selectedBooks.length < torahBooks.length) {
+                searchParams.books = selectedBooks;
             }
             
             isSearching = true;
@@ -834,10 +928,20 @@ def get_main_template():
             if (useStreaming) {
                 // Use Server-Sent Events for streaming results
                 try {
-                    const eventSource = new EventSource('/api/search/stream?' + new URLSearchParams({
-                        phrase: query,
-                        search_type: searchType
-                    }));
+                    // Create URL search params
+                    const urlParams = new URLSearchParams();
+                    
+                    // Add all search parameters
+                    for (const [key, value] of Object.entries(searchParams)) {
+                        if (Array.isArray(value)) {
+                            // Handle arrays (like books)
+                            value.forEach(item => urlParams.append(key, item));
+                        } else {
+                            urlParams.append(key, value);
+                        }
+                    }
+                    
+                    const eventSource = new EventSource('/api/search/stream?' + urlParams.toString());
                     
                     // Store EventSource for cancellation
                     window.currentEventSource = eventSource;
@@ -912,10 +1016,7 @@ def get_main_template():
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ 
-                            phrase: query,
-                            search_type: searchType
-                        }),
+                        body: JSON.stringify(searchParams),
                         signal: signal
                     });
                     
