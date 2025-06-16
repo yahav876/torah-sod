@@ -1772,12 +1772,6 @@ def get_main_template():
                 selectedSources.push(checkbox.value);
             });
             
-            console.log("Applying filters:", { 
-                selectedBooks, 
-                selectedSources,
-                originalResultsCount: originalSearchResults.results.length
-            });
-            
             // Check if any filters are selected
             if (selectedBooks.length === 0 || selectedSources.length === 0) {
                 // No filters selected, show a message
@@ -1786,71 +1780,65 @@ def get_main_template():
                 return;
             }
             
-            try {
-                // Create a completely new filtered data object
-                const filteredData = {
-                    success: true,
-                    input_phrase: originalSearchResults.input_phrase,
-                    search_time: originalSearchResults.search_time,
-                    total_variants: 0,
-                    results: []
-                };
+            // Create a completely new filtered data object
+            const filteredData = {
+                success: true,
+                input_phrase: originalSearchResults.input_phrase,
+                search_time: originalSearchResults.search_time,
+                total_variants: 0,
+                results: []
+            };
+            
+            // Apply filters to each result
+            for (let i = 0; i < originalSearchResults.results.length; i++) {
+                const originalResult = originalSearchResults.results[i];
                 
-                // Apply filters to each result
-                for (let i = 0; i < originalSearchResults.results.length; i++) {
-                    const originalResult = originalSearchResults.results[i];
-                    
-                    // Check if any of the result's sources are in the selected sources
-                    const hasSelectedSource = originalResult.sources.some(source => 
-                        selectedSources.includes(source)
-                    );
-                    
-                    // Skip if none of the result's sources are selected
-                    if (!hasSelectedSource) {
-                        continue;
-                    }
-                    
-                    // Filter locations by selected books
-                    const filteredLocations = originalResult.locations.filter(location => 
-                        selectedBooks.includes(location.book)
-                    );
-                    
-                    // Only add the result if it has matching locations
-                    if (filteredLocations.length > 0) {
-                        // Create a new result object with filtered locations
-                        const filteredResult = {
-                            variant: originalResult.variant,
-                            sources: [...originalResult.sources],
-                            locations: filteredLocations
-                        };
-                        
-                        filteredData.results.push(filteredResult);
-                    }
+                // Check if any of the result's sources are in the selected sources
+                const hasSelectedSource = originalResult.sources.some(source => 
+                    selectedSources.includes(source)
+                );
+                
+                // Skip if none of the result's sources are selected
+                if (!hasSelectedSource) {
+                    continue;
                 }
                 
-                // Update total variants count
-                filteredData.total_variants = filteredData.results.length;
+                // Filter locations by selected books
+                const filteredLocations = originalResult.locations.filter(location => 
+                    selectedBooks.includes(location.book)
+                );
                 
-                // Display the filtered results
-                renderResults(filteredData);
-                
-                // Update stats
-                const statsDiv = document.querySelector('.stats');
-                if (statsDiv) {
-                    statsDiv.innerHTML = `<strong>נמצאו ${filteredData.results.length} וריאציות</strong> (מתוך ${originalSearchResults.total_variants} סך הכל)<br>`;
-                    statsDiv.innerHTML += `סינון: ${selectedBooks.length} ספרים, ${selectedSources.length} מקורות`;
+                // Only add the result if it has matching locations
+                if (filteredLocations.length > 0) {
+                    // Create a new result object with filtered locations
+                    const filteredResult = {
+                        variant: originalResult.variant,
+                        sources: [...originalResult.sources],
+                        locations: filteredLocations
+                    };
+                    
+                    filteredData.results.push(filteredResult);
                 }
-                
-                // Check if we need to show the "Back to Previous Results" button
-                checkAndShowBackButton();
-                
-                // Show the results controls
-                document.getElementById('resultsControls').style.display = 'block';
-            } catch (error) {
-                console.error("Error applying filters:", error);
-                document.getElementById('results').innerHTML = 
-                    '<div class="error">שגיאה בסינון התוצאות: ' + error.message + '</div>';
             }
+            
+            // Update total variants count
+            filteredData.total_variants = filteredData.results.length;
+            
+            // Display the filtered results
+            renderResults(filteredData);
+            
+            // Update stats
+            const statsDiv = document.querySelector('.stats');
+            if (statsDiv) {
+                statsDiv.innerHTML = `<strong>נמצאו ${filteredData.results.length} וריאציות</strong> (מתוך ${originalSearchResults.total_variants} סך הכל)<br>`;
+                statsDiv.innerHTML += `סינון: ${selectedBooks.length} ספרים, ${selectedSources.length} מקורות`;
+            }
+            
+            // Check if we need to show the "Back to Previous Results" button
+            checkAndShowBackButton();
+            
+            // Show the results controls
+            document.getElementById('resultsControls').style.display = 'block';
         }
         
         // Function to reset filters
