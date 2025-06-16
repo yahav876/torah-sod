@@ -1208,14 +1208,13 @@ def get_main_template():
             // Store the original results for filtering
             originalSearchResults = data;
             
-            // Check if this is a context search (contains book: or chapter: or verse:)
-            const isContextSearch = data.input_phrase && 
+            // If this is a context search, add a history entry to allow browser back button navigation
+            if (data.input_phrase && 
                 (data.input_phrase.includes('book:') || 
                  data.input_phrase.includes('chapter:') || 
-                 data.input_phrase.includes('verse:'));
-            
-            // If this is a context search, add a history entry to allow browser back button navigation
-            if (isContextSearch && sessionStorage.getItem('previousSearchResults')) {
+                 data.input_phrase.includes('verse:')) && 
+                sessionStorage.getItem('previousSearchResults')) {
+                
                 // Add a history entry for the current search
                 if (window.history && window.history.pushState) {
                     // Add a state object with the current search results
@@ -2003,25 +2002,39 @@ def get_main_template():
                 }
             };
             
-            document.getElementById('backToPreviousResultsBtn').onclick = function() {
-                // Get the previous search results from session storage
-                const previousResults = JSON.parse(sessionStorage.getItem('previousSearchResults'));
-                if (previousResults) {
-                    console.log("Displaying previous results from modal");
-                    // Display the previous search results
-                    displayResults(previousResults);
-                    
-                    // Clear the session storage
-                    sessionStorage.removeItem('previousSearchResults');
-                    sessionStorage.removeItem('isPreviousSearch');
-                    
-                    // Close the modal
-                    modal.style.display = 'none';
-                } else {
-                    // If no previous results, just close the modal
-                    modal.style.display = 'none';
-                }
-            };
+            // Add a back to previous results button if we have previous results
+            if (sessionStorage.getItem('previousSearchResults')) {
+                const backButton = document.createElement('button');
+                backButton.id = 'backToPreviousResultsBtn';
+                backButton.className = 'search-context-option';
+                backButton.style.backgroundColor = '#e67e22';
+                backButton.textContent = 'חזור לתוצאות הקודמות';
+                
+                // Add click event listener
+                backButton.onclick = function() {
+                    // Get the previous search results from session storage
+                    const previousResults = JSON.parse(sessionStorage.getItem('previousSearchResults'));
+                    if (previousResults) {
+                        console.log("Displaying previous results from modal");
+                        // Display the previous search results
+                        displayResults(previousResults);
+                        
+                        // Clear the session storage
+                        sessionStorage.removeItem('previousSearchResults');
+                        sessionStorage.removeItem('isPreviousSearch');
+                        
+                        // Close the modal
+                        modal.style.display = 'none';
+                    } else {
+                        // If no previous results, just close the modal
+                        modal.style.display = 'none';
+                    }
+                };
+                
+                // Add the button to the options container
+                const optionsContainer = document.querySelector('.search-context-options');
+                optionsContainer.appendChild(backButton);
+            }
             
             document.getElementById('closeLocationModal').onclick = function() {
                 modal.style.display = 'none';
