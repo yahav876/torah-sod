@@ -1771,12 +1771,15 @@ def get_main_template():
         function renderResults(data) {
             const resultsDiv = document.getElementById('results');
             
-            // Clear existing results except stats
-            const statsDiv = document.querySelector('.stats');
+            // Clear existing results
             resultsDiv.innerHTML = '';
-            if (statsDiv) {
-                resultsDiv.appendChild(statsDiv);
-            }
+            
+            // Always create and add the stats div at the top
+            const statsDiv = document.createElement('div');
+            statsDiv.className = 'stats';
+            statsDiv.innerHTML = `<strong>נמצאו ${data.total_variants} וריאציות</strong><br>`;
+            statsDiv.innerHTML += `זמן חיפוש: ${data.search_time} שניות`;
+            resultsDiv.appendChild(statsDiv);
             
             // Calculate total pages
             totalPages = Math.ceil(data.results.length / resultsPerPage);
