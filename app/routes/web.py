@@ -1989,7 +1989,7 @@ def get_main_template():
                 
                 resultItem.innerHTML = html;
                 resultsDiv.appendChild(resultItem);
-            });
+            };
             
             // Initialize all location containers as collapsed by default
             data.results.forEach((result, index) => {
