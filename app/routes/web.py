@@ -1927,12 +1927,13 @@ def get_main_template():
             // Calculate total pages
             totalPages = Math.ceil(data.results.length / resultsPerPage);
             
-            // Add pagination controls
+            // Add pagination controls at the top
             const paginationHtml = createPaginationControls(data.results.length);
-            const paginationDiv = document.createElement('div');
-            paginationDiv.className = 'pagination-container';
-            paginationDiv.innerHTML = paginationHtml;
-            resultsDiv.appendChild(paginationDiv);
+            const paginationTopDiv = document.createElement('div');
+            paginationTopDiv.className = 'pagination-container';
+            paginationTopDiv.style.marginBottom = '20px';
+            paginationTopDiv.innerHTML = paginationHtml;
+            resultsDiv.appendChild(paginationTopDiv);
             
             // Get the original search term
             const searchTerm = data.input_phrase;
@@ -2033,29 +2034,42 @@ def get_main_template():
                 });
             });
             
-            // Add event listeners for pagination controls
+            // Add pagination controls at the bottom as well
+            const paginationBottomDiv = document.createElement('div');
+            paginationBottomDiv.className = 'pagination-container';
+            paginationBottomDiv.style.marginTop = '20px';
+            paginationBottomDiv.innerHTML = paginationHtml;
+            resultsDiv.appendChild(paginationBottomDiv);
             
-            // Previous page button
-            const prevPageBtn = document.getElementById('prevPageBtn');
-            if (prevPageBtn && !prevPageBtn.disabled) {
-                prevPageBtn.addEventListener('click', function() {
-                    if (currentPage > 1) {
-                        currentPage--;
-                        renderResults(data);
-                    }
-                });
-            }
+            // Add event listeners for pagination controls (both top and bottom)
             
-            // Next page button
-            const nextPageBtn = document.getElementById('nextPageBtn');
-            if (nextPageBtn && !nextPageBtn.disabled) {
-                nextPageBtn.addEventListener('click', function() {
-                    if (currentPage < totalPages) {
-                        currentPage++;
-                        renderResults(data);
-                    }
-                });
-            }
+            // Previous page buttons
+            document.querySelectorAll('#prevPageBtn').forEach(button => {
+                if (!button.disabled) {
+                    button.addEventListener('click', function() {
+                        if (currentPage > 1) {
+                            currentPage--;
+                            renderResults(data);
+                            // Scroll to top after page change
+                            window.scrollTo(0, 0);
+                        }
+                    });
+                }
+            });
+            
+            // Next page buttons
+            document.querySelectorAll('#nextPageBtn').forEach(button => {
+                if (!button.disabled) {
+                    button.addEventListener('click', function() {
+                        if (currentPage < totalPages) {
+                            currentPage++;
+                            renderResults(data);
+                            // Scroll to top after page change
+                            window.scrollTo(0, 0);
+                        }
+                    });
+                }
+            });
             
             // Page number buttons
             document.querySelectorAll('.pagination-btn[data-page]').forEach(button => {
@@ -2064,19 +2078,20 @@ def get_main_template():
                     if (page !== currentPage) {
                         currentPage = page;
                         renderResults(data);
+                        // Scroll to top after page change
+                        window.scrollTo(0, 0);
                     }
                 });
             });
             
-            // Results per page selector
-            const resultsPerPageSelect = document.getElementById('resultsPerPageSelect');
-            if (resultsPerPageSelect) {
-                resultsPerPageSelect.addEventListener('change', function() {
+            // Results per page selectors
+            document.querySelectorAll('#resultsPerPageSelect').forEach(select => {
+                select.addEventListener('change', function() {
                     resultsPerPage = parseInt(this.value);
                     currentPage = 1; // Reset to first page when changing results per page
                     renderResults(data);
                 });
-            }
+            });
         }
         
         // Function to show the location search modal
