@@ -141,9 +141,35 @@ class TorahService:
             normalized = normalized.replace(final, regular)
         return normalized
     
-    def get_torah_lines(self):
-        """Get Torah lines."""
-        return self._torah_lines or []
+    def get_torah_lines(self, filter_book=None):
+        """
+        Get Torah lines, optionally filtered by book.
+        
+        Args:
+            filter_book: Optional book name to filter by
+            
+        Returns:
+            List of lines from the Torah or specific book
+        """
+        if not filter_book:
+            return self._torah_lines or []
+        
+        # If a book filter is specified, load the book-specific file
+        try:
+            book_file = os.path.join(os.path.dirname(current_app.config['TORAH_FILE']), '../books', f"{filter_book}.txt")
+            if os.path.exists(book_file):
+                logger.info("loading_book_specific_file", book=filter_book, path=book_file)
+                with open(book_file, encoding="utf-8") as f:
+                    book_content = f.read()
+                    book_lines = book_content.splitlines(keepends=True)
+                    return book_lines
+            else:
+                logger.warning("book_file_not_found", book=filter_book, path=book_file)
+                # Fall back to filtering from the full Torah text
+                return self._torah_lines or []
+        except Exception as e:
+            logger.error("book_load_error", book=filter_book, error=str(e), exc_info=True)
+            return self._torah_lines or []
     
     def get_torah_text(self):
         """Get full Torah text."""

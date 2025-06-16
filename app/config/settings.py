@@ -73,7 +73,7 @@ class BaseConfig:
     BATCH_SIZE_MULTIPLIER = int(os.environ.get('BATCH_SIZE_MULTIPLIER', '150'))  # Optimized batch size
     
     # Parallel search settings
-    USE_BOOK_PARALLEL_SEARCH = os.environ.get('USE_BOOK_PARALLEL_SEARCH', 'false').lower() == 'true'
+    USE_BOOK_PARALLEL_SEARCH = os.environ.get('USE_BOOK_PARALLEL_SEARCH', 'true').lower() == 'true'
 
 
 class DevelopmentConfig(BaseConfig):

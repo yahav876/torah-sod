@@ -144,32 +144,16 @@ class SearchService:
     
     def _perform_search(self, phrase, partial_results_callback=None, is_memory_search=False, filter_book=None):
         """Perform the actual search."""
-        # Get Torah text
-        lines = self.torah_service.get_torah_lines()
+        # Get Torah text, filtered by book if specified
+        lines = self.torah_service.get_torah_lines(filter_book=filter_book)
         full_text = self.torah_service.get_torah_text()
         
         if not lines:
             raise ValueError("Torah text not loaded")
         
-        # If a book filter is specified, filter the lines to only include that book
-        if filter_book:
-            logger.info("filtering_lines_by_book", book=filter_book)
-            # Group lines by book
-            book_lines = self._group_lines_by_book(lines)
-            
-            # Check if the specified book exists in our grouped lines
-            if filter_book in book_lines:
-                # Use only the lines for the specified book
-                lines = book_lines[filter_book]
-                logger.info("filtered_lines_count", book=filter_book, count=len(lines))
-            else:
-                logger.warning("book_not_found_in_grouped_lines", book=filter_book)
-                # Try a more flexible approach to find the book
-                for book_name, book_content in book_lines.items():
-                    if book_name.startswith(filter_book) or filter_book.startswith(book_name):
-                        lines = book_content
-                        logger.info("found_similar_book", requested=filter_book, found=book_name, count=len(lines))
-                        break
+        logger.info("search_text_loaded", 
+                   filter_book=filter_book, 
+                   lines_count=len(lines))
         
         # Check if this is a multi-word search
         words = phrase.strip().split()
