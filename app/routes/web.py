@@ -696,7 +696,6 @@ def get_main_template():
             <div class="search-context-options">
                 <button id="searchLocationVerse" class="search-context-option">חפש בפסוק</button>
                 <button id="searchLocationChapter" class="search-context-option">חפש בפרק</button>
-                <button id="backToPreviousResultsBtn" class="search-context-option" style="background-color: #e67e22;">חזור לתוצאות הקודמות</button>
             </div>
             <button id="closeLocationModal" class="search-context-close">סגור</button>
         </div>
@@ -1208,6 +1207,47 @@ def get_main_template():
             
             // Store the original results for filtering
             originalSearchResults = data;
+            
+            // Check if this is a context search (contains book: or chapter: or verse:)
+            const isContextSearch = data.input_phrase && 
+                (data.input_phrase.includes('book:') || 
+                 data.input_phrase.includes('chapter:') || 
+                 data.input_phrase.includes('verse:'));
+            
+            // If this is a context search, show the "Back to Previous Results" button
+            if (isContextSearch && sessionStorage.getItem('previousSearchResults')) {
+                // Create the back button
+                const backButton = document.createElement('button');
+                backButton.id = 'backToPreviousResults';
+                backButton.className = 'control-btn';
+                backButton.style.backgroundColor = '#e67e22';
+                backButton.style.marginBottom = '20px';
+                backButton.style.fontSize = '18px';
+                backButton.style.padding = '15px 30px';
+                backButton.textContent = 'חזור לתוצאות הקודמות';
+                
+                // Add click event listener
+                backButton.addEventListener('click', function() {
+                    console.log("Back button clicked");
+                    // Get the previous search results from session storage
+                    const previousResults = JSON.parse(sessionStorage.getItem('previousSearchResults'));
+                    if (previousResults) {
+                        console.log("Displaying previous results");
+                        // Display the previous search results
+                        displayResults(previousResults);
+                        
+                        // Clear the session storage
+                        sessionStorage.removeItem('previousSearchResults');
+                        sessionStorage.removeItem('isPreviousSearch');
+                        
+                        // Remove the back button
+                        this.remove();
+                    }
+                });
+                
+                // Insert the back button at the top of the results
+                resultsDiv.appendChild(backButton);
+            }
             
             // Collect all unique sources and books for filters
             const allSources = new Set();
