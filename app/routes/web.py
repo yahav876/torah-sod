@@ -525,6 +525,60 @@ def get_main_template():
             text-align: center;
         }
         
+        /* Pagination styles */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .pagination-btn {
+            padding: 8px 15px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        
+        .pagination-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        .pagination-btn.active {
+            background: #2c3e50;
+        }
+        
+        .pagination-btn.disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .pagination-info {
+            margin: 0 15px;
+            color: #7f8c8d;
+        }
+        
+        .results-per-page {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            gap: 10px;
+        }
+        
+        .results-per-page select {
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        
         .error {
             background: #e74c3c;
             color: white;
@@ -1192,6 +1246,11 @@ def get_main_template():
         // Store the original search results for filtering
         let originalSearchResults = null;
         
+        // Pagination variables
+        let currentPage = 1;
+        let resultsPerPage = 10;
+        let totalPages = 1;
+        
         function displayResults(data) {
             const resultsDiv = document.getElementById('results');
             
@@ -1204,6 +1263,23 @@ def get_main_template():
                 resultsDiv.innerHTML = '<div class="error">לא נמצאו תוצאות עבור: ' + data.input_phrase + '</div>';
                 return;
             }
+            
+            // Reset pagination to first page
+            currentPage = 1;
+            
+            // Set results per page based on total results
+            if (data.results.length <= 10) {
+                resultsPerPage = 10;
+            } else if (data.results.length <= 25) {
+                resultsPerPage = 25;
+            } else if (data.results.length <= 50) {
+                resultsPerPage = 50;
+            } else {
+                resultsPerPage = 100;
+            }
+            
+            // Calculate total pages
+            totalPages = Math.ceil(data.results.length / resultsPerPage);
             
             // Store the original results for filtering
             originalSearchResults = data;
@@ -1824,6 +1900,50 @@ def get_main_template():
         }
         
         // Function to render results (separated from displayResults for reuse)
+        // Function to create pagination controls
+        function createPaginationControls(totalResults) {
+            // Calculate total pages
+            totalPages = Math.ceil(totalResults / resultsPerPage);
+            
+            // Create results per page selector
+            let html = '<div class="results-per-page">';
+            html += '<label for="resultsPerPageSelect">תוצאות בעמוד:</label>';
+            html += '<select id="resultsPerPageSelect">';
+            [10, 25, 50, 100].forEach(value => {
+                html += `<option value="${value}" ${resultsPerPage === value ? 'selected' : ''}>${value}</option>`;
+            });
+            html += '</select>';
+            html += '</div>';
+            
+            // Create pagination buttons
+            html += '<div class="pagination">';
+            
+            // Previous button
+            html += `<button class="pagination-btn ${currentPage === 1 ? 'disabled' : ''}" 
+                id="prevPageBtn" ${currentPage === 1 ? 'disabled' : ''}>הקודם</button>`;
+            
+            // Page numbers
+            const maxButtons = 5;
+            const startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+            const endPage = Math.min(totalPages, startPage + maxButtons - 1);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" 
+                    data-page="${i}">${i}</button>`;
+            }
+            
+            // Next button
+            html += `<button class="pagination-btn ${currentPage === totalPages ? 'disabled' : ''}" 
+                id="nextPageBtn" ${currentPage === totalPages ? 'disabled' : ''}>הבא</button>`;
+            
+            // Page info
+            html += `<span class="pagination-info">עמוד ${currentPage} מתוך ${totalPages}</span>`;
+            
+            html += '</div>';
+            
+            return html;
+        }
+        
         function renderResults(data) {
             const resultsDiv = document.getElementById('results');
             
@@ -1834,11 +1954,27 @@ def get_main_template():
                 resultsDiv.appendChild(statsDiv);
             }
             
+            // Calculate total pages
+            totalPages = Math.ceil(data.results.length / resultsPerPage);
+            
+            // Add pagination controls
+            const paginationHtml = createPaginationControls(data.results.length);
+            const paginationDiv = document.createElement('div');
+            paginationDiv.className = 'pagination-container';
+            paginationDiv.innerHTML = paginationHtml;
+            resultsDiv.appendChild(paginationDiv);
+            
             // Get the original search term
             const searchTerm = data.input_phrase;
             
-            data.results.forEach((result, index) => {
-                const resultId = 'result-' + index;
+            // Calculate start and end indices for current page
+            const startIndex = (currentPage - 1) * resultsPerPage;
+            const endIndex = Math.min(startIndex + resultsPerPage, data.results.length);
+            
+            // Display only the results for the current page
+            for (let i = startIndex; i < endIndex; i++) {
+                const result = data.results[i];
+                const resultId = 'result-' + i;
                 const resultItem = document.createElement('div');
                 resultItem.className = 'result-item';
                 
@@ -1926,6 +2062,51 @@ def get_main_template():
                     showLocationSearchModal(book, chapter, verse);
                 });
             });
+            
+            // Add event listeners for pagination controls
+            
+            // Previous page button
+            const prevPageBtn = document.getElementById('prevPageBtn');
+            if (prevPageBtn && !prevPageBtn.disabled) {
+                prevPageBtn.addEventListener('click', function() {
+                    if (currentPage > 1) {
+                        currentPage--;
+                        renderResults(data);
+                    }
+                });
+            }
+            
+            // Next page button
+            const nextPageBtn = document.getElementById('nextPageBtn');
+            if (nextPageBtn && !nextPageBtn.disabled) {
+                nextPageBtn.addEventListener('click', function() {
+                    if (currentPage < totalPages) {
+                        currentPage++;
+                        renderResults(data);
+                    }
+                });
+            }
+            
+            // Page number buttons
+            document.querySelectorAll('.pagination-btn[data-page]').forEach(button => {
+                button.addEventListener('click', function() {
+                    const page = parseInt(this.getAttribute('data-page'));
+                    if (page !== currentPage) {
+                        currentPage = page;
+                        renderResults(data);
+                    }
+                });
+            });
+            
+            // Results per page selector
+            const resultsPerPageSelect = document.getElementById('resultsPerPageSelect');
+            if (resultsPerPageSelect) {
+                resultsPerPageSelect.addEventListener('change', function() {
+                    resultsPerPage = parseInt(this.value);
+                    currentPage = 1; // Reset to first page when changing results per page
+                    renderResults(data);
+                });
+            }
         }
         
         // Function to show the location search modal
