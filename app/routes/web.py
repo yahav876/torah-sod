@@ -653,15 +653,11 @@ def get_main_template():
                 </div>
                 
                 <div id="preSearchFiltersContent" style="display: none;">
-                    <div style="font-weight: bold; margin-bottom: 5px;">חפש רק בספרים הבאים:</div>
+                    <div style="font-weight: bold; margin-bottom: 5px;">חפש רק בספר:</div>
                     <div style="margin-bottom: 10px;">
                         <select id="bookFilterDropdown" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
                             <option value="all">כל הספרים</option>
                         </select>
-                    </div>
-                    <div id="preSearchBookFilter" class="checkbox-group" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 8px; margin-bottom: 15px;">
-                        <!-- Will be populated dynamically -->
-                        <div style="text-align: center; color: #7f8c8d;">טוען...</div>
                     </div>
                 </div>
             </div>
@@ -882,9 +878,6 @@ def get_main_template():
         
         // Function to populate the pre-search book filter
         function populatePreSearchBookFilter() {
-            const preSearchBookFilter = document.getElementById('preSearchBookFilter');
-            preSearchBookFilter.innerHTML = '';
-            
             // Populate the dropdown with all book names
             const dropdown = document.getElementById('bookFilterDropdown');
             // Clear existing options except the first one
@@ -898,82 +891,6 @@ def get_main_template():
                 option.value = book;
                 option.textContent = book;
                 dropdown.appendChild(option);
-            });
-            
-            // Add event listener for dropdown change
-            dropdown.addEventListener('change', function() {
-                // If "all" is selected, check all checkboxes
-                if (this.value === 'all') {
-                    document.querySelectorAll('input[name="preSearchBookFilter"]').forEach(checkbox => {
-                        checkbox.checked = true;
-                    });
-                    document.querySelector('.select-all-pre-search-books').checked = true;
-                } else {
-                    // Uncheck all checkboxes first
-                    document.querySelectorAll('input[name="preSearchBookFilter"]').forEach(checkbox => {
-                        checkbox.checked = false;
-                    });
-                    document.querySelector('.select-all-pre-search-books').checked = false;
-                    
-                    // Check only the selected book
-                    const checkbox = document.querySelector(`input[name="preSearchBookFilter"][value="${this.value}"]`);
-                    if (checkbox) {
-                        checkbox.checked = true;
-                    }
-                }
-            });
-            
-            // Add "Select All" checkbox
-            const selectAllLabel = document.createElement('label');
-            selectAllLabel.innerHTML = `<input type="checkbox" class="select-all-pre-search-books" checked> בחר הכל`;
-            selectAllLabel.style.fontWeight = 'bold';
-            selectAllLabel.style.borderBottom = '1px solid #ddd';
-            selectAllLabel.style.paddingBottom = '5px';
-            selectAllLabel.style.marginBottom = '5px';
-            preSearchBookFilter.appendChild(selectAllLabel);
-            
-            // Add individual book checkboxes
-            torahBooks.forEach(book => {
-                const label = document.createElement('label');
-                label.innerHTML = `<input type="checkbox" name="preSearchBookFilter" value="${book}" checked> ${book}`;
-                preSearchBookFilter.appendChild(label);
-            });
-            
-            // Add event listener for "Select All" checkbox
-            document.querySelector('.select-all-pre-search-books').addEventListener('change', function() {
-                const isChecked = this.checked;
-                document.querySelectorAll('input[name="preSearchBookFilter"]').forEach(checkbox => {
-                    checkbox.checked = isChecked;
-                });
-                
-                // Update dropdown to "all" if all are checked
-                if (isChecked) {
-                    document.getElementById('bookFilterDropdown').value = 'all';
-                }
-            });
-            
-            // Add event listeners for individual checkboxes
-            document.querySelectorAll('input[name="preSearchBookFilter"]').forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
-                    // Check if all checkboxes are checked
-                    const allChecked = Array.from(document.querySelectorAll('input[name="preSearchBookFilter"]'))
-                        .every(cb => cb.checked);
-                    
-                    // Update the "Select All" checkbox
-                    document.querySelector('.select-all-pre-search-books').checked = allChecked;
-                    
-                    // Count checked checkboxes
-                    const checkedCount = document.querySelectorAll('input[name="preSearchBookFilter"]:checked').length;
-                    
-                    // If only one checkbox is checked, update the dropdown
-                    if (checkedCount === 1) {
-                        const checkedBook = document.querySelector('input[name="preSearchBookFilter"]:checked').value;
-                        document.getElementById('bookFilterDropdown').value = checkedBook;
-                    } else {
-                        // Otherwise set to "all"
-                        document.getElementById('bookFilterDropdown').value = 'all';
-                    }
-                });
             });
         }
         
@@ -989,26 +906,26 @@ def get_main_template():
                 return;
             }
             
-            // Get selected books from pre-search filter
-            let selectedBooks = [];
-            const preSearchFiltersContent = document.getElementById('preSearchFiltersContent');
-            
-            // Only apply book filters if the filter section is visible
-            if (preSearchFiltersContent.style.display !== 'none') {
-                document.querySelectorAll('input[name="preSearchBookFilter"]:checked').forEach(checkbox => {
-                    selectedBooks.push(checkbox.value);
-                });
-            }
-            
             // Create search parameters
             const searchParams = {
                 phrase: query,
                 search_type: searchType
             };
             
-            // Add book filters if any are selected (and not all books are selected)
-            if (selectedBooks.length > 0 && selectedBooks.length < torahBooks.length) {
-                searchParams.books = selectedBooks;
+            // Get selected book from dropdown
+            const preSearchFiltersContent = document.getElementById('preSearchFiltersContent');
+            
+            // Only apply book filter if the filter section is visible
+            if (preSearchFiltersContent.style.display !== 'none') {
+                const dropdown = document.getElementById('bookFilterDropdown');
+                const selectedBook = dropdown.value;
+                
+                // If a specific book is selected (not "all"), add it to the search parameters
+                if (selectedBook !== 'all') {
+                    // Add the book filter to the search phrase
+                    searchParams.phrase = `${query} book:${selectedBook}`;
+                    console.log(`Filtering search by book: ${selectedBook}`);
+                }
             }
             
             isSearching = true;
