@@ -1861,9 +1861,9 @@ def get_main_template():
             
             // Check if we need to show the "Back to Previous Results" button
             checkAndShowBackButton();
-                
-                // Show the results controls
-                document.getElementById('resultsControls').style.display = 'block';
+            
+            // Show the results controls
+            document.getElementById('resultsControls').style.display = 'block';
             } catch (error) {
                 console.error("Error applying filters:", error);
                 document.getElementById('results').innerHTML = 
