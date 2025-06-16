@@ -740,6 +740,9 @@ def get_main_template():
             document.getElementById('collapseAllBtn').addEventListener('click', function() {
                 collapseAllVariants();
             });
+            
+            // Check if we need to show the "Back to Previous Results" button
+            checkAndShowBackButton();
         });
         
         // Search type toggle function removed - using only in-memory search
@@ -1545,6 +1548,13 @@ def get_main_template():
                 verse
             });
             
+            // Store current search results for back button functionality
+            if (originalSearchResults) {
+                // Save the current search results to session storage
+                sessionStorage.setItem('previousSearchResults', JSON.stringify(originalSearchResults));
+                sessionStorage.setItem('isPreviousSearch', 'true');
+            }
+            
             // Construct the search query based on context type
             if (contextType === 'verse' && verse) {
                 // Search in specific verse
@@ -1559,6 +1569,46 @@ def get_main_template():
             
             // Execute the search
             search();
+        }
+        
+        // Function to check if we need to show the "Back to Previous Results" button
+        function checkAndShowBackButton() {
+            // Check if we have previous search results in session storage
+            const hasPreviousResults = sessionStorage.getItem('isPreviousSearch') === 'true';
+            
+            if (hasPreviousResults) {
+                // Create the back button if it doesn't exist
+                let backButton = document.getElementById('backToPreviousResults');
+                if (!backButton) {
+                    backButton = document.createElement('button');
+                    backButton.id = 'backToPreviousResults';
+                    backButton.className = 'control-btn';
+                    backButton.style.backgroundColor = '#e67e22';
+                    backButton.style.marginBottom = '20px';
+                    backButton.textContent = 'חזור לתוצאות הקודמות';
+                    
+                    // Add click event listener
+                    backButton.addEventListener('click', function() {
+                        // Get the previous search results from session storage
+                        const previousResults = JSON.parse(sessionStorage.getItem('previousSearchResults'));
+                        if (previousResults) {
+                            // Display the previous search results
+                            displayResults(previousResults);
+                            
+                            // Clear the session storage
+                            sessionStorage.removeItem('previousSearchResults');
+                            sessionStorage.removeItem('isPreviousSearch');
+                            
+                            // Remove the back button
+                            this.remove();
+                        }
+                    });
+                    
+                    // Insert the back button at the top of the results
+                    const resultsDiv = document.getElementById('results');
+                    resultsDiv.insertBefore(backButton, resultsDiv.firstChild);
+                }
+            }
         }
         
         // Function to apply filters to search results
@@ -1657,15 +1707,18 @@ def get_main_template():
                     } : null
                 });
                 
-                // Display the filtered results
-                renderResults(filteredData);
-                
-                // Update stats
-                const statsDiv = document.querySelector('.stats');
-                if (statsDiv) {
-                    statsDiv.innerHTML = `<strong>נמצאו ${filteredData.results.length} וריאציות</strong> (מתוך ${originalSearchResults.total_variants} סך הכל)<br>`;
-                    statsDiv.innerHTML += `סינון: ${selectedBooks.length} ספרים, ${selectedSources.length} מקורות`;
-                }
+            // Display the filtered results
+            renderResults(filteredData);
+            
+            // Update stats
+            const statsDiv = document.querySelector('.stats');
+            if (statsDiv) {
+                statsDiv.innerHTML = `<strong>נמצאו ${filteredData.results.length} וריאציות</strong> (מתוך ${originalSearchResults.total_variants} סך הכל)<br>`;
+                statsDiv.innerHTML += `סינון: ${selectedBooks.length} ספרים, ${selectedSources.length} מקורות`;
+            }
+            
+            // Check if we need to show the "Back to Previous Results" button
+            checkAndShowBackButton();
                 
                 // Show the results controls
                 document.getElementById('resultsControls').style.display = 'block';
